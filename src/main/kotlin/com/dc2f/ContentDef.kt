@@ -23,7 +23,7 @@ interface Parsable<T> {
 }
 
 @PropertyType("md")
-class Markdown(private val content: String) {
+class Markdown(private val content: String) : ContentDef {
 
     companion object : Parsable<Markdown> {
         override fun parseContent(file: Path): Markdown {

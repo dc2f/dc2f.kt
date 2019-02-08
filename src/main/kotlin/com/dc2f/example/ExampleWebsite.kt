@@ -31,5 +31,5 @@ fun main() {
 
     val website = ContentLoader(ExampleWebsite::class).load(FileSystems.getDefault().getPath("example", "example_website"))
     logger.info { "loaded website ${website}."}
-    logger.info { "reflected: ${ReflectionToStringBuilder.toString(website, RecursiveToStringStyle())}" }
+    logger.info { "reflected: ${ReflectionToStringBuilder.toString(website, MultilineRecursiveToStringStyle())}" }
 }

@@ -6,6 +6,9 @@
 
 val jacksonVersion = "2.9.4"
 
+group = "com.dc2f"
+version = "0.0.1-SNAPSHOT"
+
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
     id("org.jetbrains.kotlin.jvm").version("1.3.10")
@@ -28,6 +31,8 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.1")
 
     // yaml deserialize
+    compile("com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion")
+
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-mrbean:$jacksonVersion")
