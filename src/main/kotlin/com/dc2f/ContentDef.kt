@@ -18,7 +18,7 @@ interface ContentDef
 interface RichText: ContentDef {
 }
 
-interface Parsable<T> {
+interface Parsable<T: ContentDef> {
     abstract fun parseContent(file: Path): T
 }
 
