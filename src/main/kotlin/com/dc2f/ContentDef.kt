@@ -1,8 +1,10 @@
 package com.dc2f
 
+import com.dc2f.render.RenderContext
 import com.fasterxml.jackson.annotation.JacksonInject
 import mu.KotlinLogging
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder
+import java.io.File
 import java.lang.annotation.Inherited
 import java.nio.file.*
 
@@ -35,6 +37,17 @@ class Markdown(private val content: String) : ContentDef {
         return ReflectionToStringBuilder(this).toString()
     }
 }
+
+open class FileAsset(val file: ContentPath, val fsPath: Path) {
+    fun href(context: RenderContext<*>): String {
+        val targetPath = context.rootPath.resolve(file.toString())
+        Files.createDirectories(targetPath.parent)
+        Files.copy(fsPath, targetPath)
+        return "/$file"
+    }
+}
+
+open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
 
 //@JsonDeserialize(using = ChildrenDeserializer::class)
 //class Children<T: ContentDef>(val children: List<T>)

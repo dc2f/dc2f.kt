@@ -1,6 +1,9 @@
 package com.dc2f.render
 
 import com.dc2f.*
+import com.dc2f.assets.Asset
+import java.net.*
+import java.nio.file.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
 
@@ -15,20 +18,46 @@ abstract class Theme {
     internal fun <T: ContentDef> findRenderer(node: T): ThemeConfig.RenderConfig<*> =
         // for now we don't support having more than one renderer for each type.
         config.renderers.single { it.canRender(node) }
+
+}
+
+class AssetPipeline(
+    private val context: RenderContext<*>,
+    private val sourceUri: URI
+) {
+
+    private val pipeline = mutableListOf<Asset>()
+
+    fun href(outputPath: String): String = runTransformations(outputPath)
+
+    private fun runTransformations(outputPath: String): String {
+        // we currently only support one pipeline step.. don't ask.
+        val absPath = context.rootPath.resolve(outputPath)
+        Files.createDirectories(absPath.parent);
+        val outputUri = absPath.toUri()
+//        val output = pipeline[0].transform(sourceUri.toURL().readText())
+        pipeline[0].transform(sourceUri, outputUri)
+//        Files.write(context.rootPath.resolve(outputPath), output.toByteArray())
+        return outputPath
+    }
+
+    fun transform(asset: Asset): AssetPipeline {
+        pipeline.add(asset)
+        return this
+    }
 }
 
 
 data class RenderContext<T : ContentDef>(
+    val rootPath: Path,
     val node: T,
     val metadata: ContentDefMetadata,
     val theme: Theme,
     val out: Appendable
 ) {
     val content get() = node
+    val context get() = this
     fun renderToHtml() {
-        buildString {
-//            appendHTML
-        }
         @Suppress("UNCHECKED_CAST")
         val renderer = theme.findRenderer(this.node)
             .renderer as RenderContext<T>.() -> Unit
@@ -38,6 +67,10 @@ data class RenderContext<T : ContentDef>(
     @Suppress("UNCHECKED_CAST")
     fun <U : ContentDef>copyForNode(node: U) =
         (this  as RenderContext<U>).copy(node = node)
+
+    fun getAsset(path: String): AssetPipeline {
+        return AssetPipeline(this, theme.javaClass.classLoader.getResource(path).toURI())
+    }
 }
 
 //open class PageRenderContext<T : ContentBranchDef<*>>(

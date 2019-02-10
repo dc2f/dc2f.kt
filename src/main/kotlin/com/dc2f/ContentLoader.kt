@@ -68,6 +68,18 @@ class ContentDefMetadata(
     val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap()
 )
 
+/**
+ * Can be requested by deserializers through [InjectableValues].
+ */
+data class ContentLoaderDeserializeContext(
+    val root: Path,
+    val currentFsPath: Path,
+    val currentContentPath: ContentPath
+) {
+    fun resolveContentPath(path: ContentPath) =
+        root.resolve(path.toString())
+}
+
 class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
@@ -94,13 +106,22 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }.toMap()
     }
 
-    fun load(dir: Path) = _load(dir, ContentPath.root)
+    fun load(dir: Path) = _load(dir, dir, ContentPath.root)
 
-    private fun _load(dir: Path, contentPath: ContentPath): LoadedContent<T> {
+    private fun _load(root: Path, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
         val module = SimpleModule()
 //        module.addDeserializer(Children::class.java, ChildrenDeserializer())
+
+        module.addDeserializer(
+            ImageAsset::class.java,
+            FileAssetDeserializer(ImageAsset::class.java, ::ImageAsset)
+        )
+        module.addDeserializer(
+            FileAsset::class.java,
+            FileAssetDeserializer(FileAsset::class.java, ::FileAsset)
+        )
 
         val objectMapper = ObjectMapper(YAMLFactory())
             .registerModule(MrBeanModule())
@@ -122,12 +143,12 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         requireNotNull(slug)
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(child, contentPath.child(slug))
+                            ._load(root, child, contentPath.child(slug))
                     }?.let { "children" to it }
                     slug != null -> childTypesForProperty(slug)?.get(typeIdentifier)?.let { type ->
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(child, contentPath.child(slug))
+                            ._load(root, child, contentPath.child(slug))
                     }?.let { slug to it }
                     else -> null
                 }
@@ -141,6 +162,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 forProperty: BeanProperty?,
                 beanInstance: Any?
             ): Any? {
+                if (valueId == ContentLoaderDeserializeContext::class.java) {
+                    return ContentLoaderDeserializeContext(root, dir, contentPath)
+                }
                 require(valueId is String)
                 logger.debug {
                     "Need to inject ${ReflectionToStringBuilder.toString(
@@ -174,9 +198,10 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 propertyTypes[extension]?.let { propType ->
                     val companion = propType.companionObjectInstance
                     if (companion is Parsable<*>) {
+                        val childPath = contentPath.child(slug)
                         file to LoadedContent(
                             companion.parseContent(file),
-                            ContentDefMetadata(contentPath.child(slug))
+                            ContentDefMetadata(childPath)
                         )
                     } else {
                         null

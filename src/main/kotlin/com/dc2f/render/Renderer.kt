@@ -1,10 +1,13 @@
 package com.dc2f.render
 
 import com.dc2f.*
+import mu.KotlinLogging
 import java.io.File
 import java.lang.StringBuilder
 import java.nio.file.*
 
+
+private val logger = KotlinLogging.logger {}
 
 class Renderer(
     private val theme: Theme,
@@ -18,7 +21,7 @@ class Renderer(
         Files.walk(target)
             .sorted(Comparator.reverseOrder())
 //            .map(Path::toFile)
-            .peek(System.out::println)
+            .peek { logger.debug { "Deleting $it" }}
             .forEach(Files::delete);
     }
 
@@ -28,7 +31,13 @@ class Renderer(
         val dir = target.resolve(metadata.path.toString())
         Files.createDirectories(dir)
         Files.newBufferedWriter(dir.resolve("index.html")).use { writer ->
-            RenderContext(node, metadata, theme, writer).renderToHtml()
+            RenderContext(
+                rootPath = dir,
+                node = node,
+                metadata = metadata,
+                theme = theme,
+                out = writer
+            ).renderToHtml()
         }
     }
 }

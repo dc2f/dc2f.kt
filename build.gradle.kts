@@ -47,12 +47,15 @@ dependencies {
     // utils
     implementation("org.apache.commons:commons-lang3:3.8.1")
     implementation("org.reflections:reflections:0.9.11")
+    compile("com.google.guava:guava:27.0.1-jre")
 
     implementation("io.ktor:ktor-http-jvm:1.1.2") // mainly for UrlBuilder
     implementation("io.ktor:ktor-http:1.1.2") // mainly for UrlBuilder
 
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")
+    // preprocessors
+    implementation("io.bit3:jsass:5.7.3")
 
     // Use the Kotlin test library
     testImplementation("org.jetbrains.kotlin:kotlin-test")
