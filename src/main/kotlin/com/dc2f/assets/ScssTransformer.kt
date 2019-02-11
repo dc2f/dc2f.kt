@@ -8,7 +8,7 @@ import java.nio.file.*
 
 private val logger = KotlinLogging.logger {}
 
-class ScssAsset() : Asset {
+class ScssTransformer : Transformer {
 
 
     override fun transform(input: URI, output: URI) {

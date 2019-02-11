@@ -1,7 +1,7 @@
 package com.dc2f.render
 
 import com.dc2f.*
-import com.dc2f.assets.Asset
+import com.dc2f.assets.Transformer
 import java.net.*
 import java.nio.file.*
 import kotlin.reflect.KClass
@@ -26,7 +26,7 @@ class AssetPipeline(
     private val sourceUri: URI
 ) {
 
-    private val pipeline = mutableListOf<Asset>()
+    private val pipeline = mutableListOf<Transformer>()
 
     fun href(outputPath: String): String = runTransformations(outputPath)
 
@@ -34,15 +34,20 @@ class AssetPipeline(
         // we currently only support one pipeline step.. don't ask.
         val absPath = context.rootPath.resolve(outputPath)
         Files.createDirectories(absPath.parent);
+
+        if (pipeline.isEmpty()) {
+            Files.copy(Paths.get(sourceUri), absPath)
+            return outputPath
+        }
+
         val outputUri = absPath.toUri()
-//        val output = pipeline[0].transform(sourceUri.toURL().readText())
         pipeline[0].transform(sourceUri, outputUri)
 //        Files.write(context.rootPath.resolve(outputPath), output.toByteArray())
         return outputPath
     }
 
-    fun transform(asset: Asset): AssetPipeline {
-        pipeline.add(asset)
+    fun transform(transformer: Transformer): AssetPipeline {
+        pipeline.add(transformer)
         return this
     }
 }
@@ -69,7 +74,20 @@ data class RenderContext<T : ContentDef>(
         (this  as RenderContext<U>).copy(node = node)
 
     fun getAsset(path: String): AssetPipeline {
-        return AssetPipeline(this, theme.javaClass.classLoader.getResource(path).toURI())
+        val resource =
+            theme.javaClass.classLoader.getResource(path)?.toURI()
+                ?: getResourceFromFileSystem(path)
+        return AssetPipeline(
+            this, resource)
+    }
+
+    private fun getResourceFromFileSystem(path: String): URI {
+        val root = FileSystems.getDefault().getPath("src", "main", "resources")
+        val resource = root.resolve(path)
+        if (!Files.exists(resource)) {
+            throw IllegalArgumentException("Unable to find required asset: $path (in $resource)")
+        }
+        return resource.toUri()
     }
 }
 

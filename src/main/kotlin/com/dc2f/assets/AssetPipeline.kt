@@ -2,6 +2,6 @@ package com.dc2f.assets
 
 import java.net.URI
 
-interface Asset {
+interface Transformer {
     fun transform(input: URI, output: URI)
 }

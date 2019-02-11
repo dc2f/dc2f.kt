@@ -129,6 +129,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
         val children = Files.list(dir)
             .filter { Files.isDirectory(it) }
+            .sorted()
             .map { child ->
                 logger.trace { "Checking child $child. $childTypes" }
                 val folderArgs = child.fileName.toString().split('.')

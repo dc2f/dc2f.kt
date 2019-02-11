@@ -1,10 +1,11 @@
 package com.dc2f
 
 import com.dc2f.render.RenderContext
+import com.dc2f.util.*
 import com.fasterxml.jackson.annotation.JacksonInject
+import com.vladsch.flexmark.html.HtmlRenderer
+import com.vladsch.flexmark.parser.Parser
 import mu.KotlinLogging
-import org.apache.commons.lang3.builder.ReflectionToStringBuilder
-import java.io.File
 import java.lang.annotation.Inherited
 import java.nio.file.*
 
@@ -31,14 +32,23 @@ class Markdown(private val content: String) : ContentDef {
         override fun parseContent(file: Path): Markdown {
             return Markdown(Files.readAllLines(file).joinToString(System.lineSeparator()))
         }
+
+        val parser: Parser by lazy {
+            Parser.builder().build()
+        }
     }
 
     override fun toString(): String {
-        return ReflectionToStringBuilder(this).toString()
+        val htmlRenderer = HtmlRenderer.builder().build()
+        val document = parser.parse(this.content)
+        return htmlRenderer.render(document)
+//        return ReflectionToStringBuilder(this).toString()
     }
 }
 
 open class FileAsset(val file: ContentPath, val fsPath: Path) {
+    val name: String get() = fsPath.fileName.toString()
+
     fun href(context: RenderContext<*>): String {
         val targetPath = context.rootPath.resolve(file.toString())
         Files.createDirectories(targetPath.parent)
@@ -47,7 +57,14 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) {
     }
 }
 
-open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
+open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath) {
+    val imageInfo: ImageInfo by lazy { parseImage() }
+    val width get() = imageInfo.width
+    val height get() = imageInfo.height
+
+    fun parseImage() =
+        ImageUtil.readImageData(fsPath) ?: throw IllegalArgumentException("Invalid image at $fsPath")
+}
 
 //@JsonDeserialize(using = ChildrenDeserializer::class)
 //class Children<T: ContentDef>(val children: List<T>)

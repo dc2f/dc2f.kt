@@ -52,6 +52,9 @@ dependencies {
     implementation("io.ktor:ktor-http-jvm:1.1.2") // mainly for UrlBuilder
     implementation("io.ktor:ktor-http:1.1.2") // mainly for UrlBuilder
 
+    // content parsers
+    implementation("com.vladsch.flexmark:flexmark-all:0.40.16")
+
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")
     // preprocessors
