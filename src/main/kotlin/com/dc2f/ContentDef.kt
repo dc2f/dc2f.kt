@@ -41,6 +41,9 @@ class Markdown(private val content: String) : ContentDef {
         }
     }
 
+    fun summary(): String =
+        toString().substringBefore("<!--more-->")
+
     override fun toString(): String {
         val htmlRenderer = HtmlRenderer.builder().build()
         val document = parser.parse(this.content)
