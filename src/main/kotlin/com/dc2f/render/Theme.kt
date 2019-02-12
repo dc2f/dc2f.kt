@@ -36,14 +36,18 @@ class AssetPipeline(
         Files.createDirectories(absPath.parent);
 
         if (pipeline.isEmpty()) {
-            Files.copy(Paths.get(sourceUri), absPath)
-            return outputPath
+            if (!Files.exists(absPath)) {
+                Files.copy(Paths.get(sourceUri), absPath)
+            }
+            return "/$outputPath"
         }
 
-        val outputUri = absPath.toUri()
-        pipeline[0].transform(sourceUri, outputUri)
+        if (!Files.exists(absPath)) {
+            val outputUri = absPath.toUri()
+            pipeline[0].transform(sourceUri, outputUri)
+        }
 //        Files.write(context.rootPath.resolve(outputPath), output.toByteArray())
-        return outputPath
+        return "/$outputPath"
     }
 
     fun transform(transformer: Transformer): AssetPipeline {
@@ -56,12 +60,18 @@ class AssetPipeline(
 data class RenderContext<T : ContentDef>(
     val rootPath: Path,
     val node: T,
+    // the root metadata.
     val metadata: ContentDefMetadata,
     val theme: Theme,
-    val out: Appendable
+    val out: Appendable,
+    val renderer: Renderer
 ) {
     val content get() = node
     val context get() = this
+    val rootNode get() = requireNotNull(renderer.loaderContext.contentByPath[ContentPath.root]) {
+        "wanted to resolve ${ContentPath.root} - available: ${renderer.loaderContext.contentByPath.entries}"
+    }
+
     fun renderToHtml() {
         @Suppress("UNCHECKED_CAST")
         val renderer = theme.findRenderer(this.node)
@@ -88,6 +98,17 @@ data class RenderContext<T : ContentDef>(
             throw IllegalArgumentException("Unable to find required asset: $path (in $resource)")
         }
         return resource.toUri()
+    }
+
+    fun<U: ContentDef> renderChildren(children: List<U>) {
+        children.map { child ->
+            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
+            renderer.renderContent(child, metadata, this)
+        }
+    }
+
+    fun href(page: ContentDef): String {
+        return "/${metadata.childrenMetadata[page]?.path}/"
     }
 }
 

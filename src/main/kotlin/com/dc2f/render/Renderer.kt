@@ -2,8 +2,6 @@ package com.dc2f.render
 
 import com.dc2f.*
 import mu.KotlinLogging
-import java.io.File
-import java.lang.StringBuilder
 import java.nio.file.*
 
 
@@ -11,7 +9,8 @@ private val logger = KotlinLogging.logger {}
 
 class Renderer(
     private val theme: Theme,
-    private val target: Path
+    private val target: Path,
+    val loaderContext: LoaderContext
 ) {
 
     private fun clear() {
@@ -25,18 +24,23 @@ class Renderer(
             .forEach(Files::delete);
     }
 
-    fun render(node: ContentDef, metadata: ContentDefMetadata) {
+    fun renderWebsite(node: ContentDef, metadata: ContentDefMetadata) {
         // first clear target directory
         clear()
+        renderContent(node, metadata)
+    }
+
+    fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null) {
         val dir = target.resolve(metadata.path.toString())
         Files.createDirectories(dir)
         Files.newBufferedWriter(dir.resolve("index.html")).use { writer ->
             RenderContext(
-                rootPath = dir,
+                rootPath = previousContext?.rootPath ?: dir,
                 node = node,
-                metadata = metadata,
+                metadata = previousContext?.metadata ?: metadata,
                 theme = theme,
-                out = writer
+                out = writer,
+                renderer = this
             ).renderToHtml()
         }
     }

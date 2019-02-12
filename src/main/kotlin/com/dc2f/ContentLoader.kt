@@ -3,6 +3,8 @@ package com.dc2f
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.fasterxml.jackson.module.mrbean.MrBeanModule
 import io.ktor.http.*
 import mu.KotlinLogging
@@ -12,12 +14,14 @@ import java.nio.file.*
 import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
+import kotlin.reflect.jvm.*
 import kotlin.streams.toList
 
 
 private val logger = KotlinLogging.logger {}
 
 data class LoadedContent<T : ContentDef>(
+    val context: LoaderContext,
     val content: T,
     val metadata: ContentDefMetadata
 )
@@ -44,6 +48,19 @@ class ContentPath private constructor(
                 protocol = URLProtocol("dc2f", 8822),
                 host = "content"
             )
+
+        private fun fromPathComponents(pathComponents: Iterable<String>) =
+            ContentPath(rootBuilder
+                .takeFrom(
+                    pathComponents.joinToString("/") {
+                        it.encodeURLQueryComponent()
+                    } + "/")
+                .build()
+            )
+    }
+
+    init {
+        assert(url.encodedPath.endsWith('/'))
     }
 
     @Suppress("unused")
@@ -52,14 +69,33 @@ class ContentPath private constructor(
 
     private fun builder() = URLBuilder().takeFrom(url)
 
+    private val pathComponents =
+        toString().split('/').map { it.decodeURLQueryComponent() }
+
+    fun parent() =
+        fromPathComponents(pathComponents.dropLast(1))
+
     fun child(pathComponent: String) = ContentPath(
         builder()
             .takeFrom(pathComponent.encodeURLQueryComponent() + "/")
             .build()
     )
 
+    fun sibling(pathComponent: String) = parent().child(pathComponent)
+
     override fun toString(): String =
         url.encodedPath.trim('/')
+
+    override fun equals(other: Any?): Boolean {
+        if (other is ContentPath) {
+            return other.url == url
+        }
+        return super.equals(other)
+    }
+
+    override fun hashCode(): Int {
+        return url.hashCode()
+    }
 
 }
 
@@ -67,6 +103,17 @@ class ContentDefMetadata(
     val path: ContentPath,
     val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap()
 )
+
+data class LoaderContext(
+    val root: Path
+) {
+    private val contentByPathMutable = mutableMapOf<ContentPath, ContentDef>()
+    val contentByPath get(): Map<ContentPath, ContentDef> = contentByPathMutable
+
+    fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
+        contentByPathMutable[content.metadata.path] = content.content
+    }
+}
 
 /**
  * Can be requested by deserializers through [InjectableValues].
@@ -106,9 +153,10 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }.toMap()
     }
 
-    fun load(dir: Path) = _load(dir, dir, ContentPath.root)
+    fun load(dir: Path) =
+        _load(LoaderContext(dir), dir, ContentPath.root)
 
-    private fun _load(root: Path, dir: Path, contentPath: ContentPath): LoadedContent<T> {
+    private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
         val module = SimpleModule()
@@ -124,6 +172,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         )
 
         val objectMapper = ObjectMapper(YAMLFactory())
+            .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
+            .registerKotlinModule()
+            .registerModule(JavaTimeModule())
             .registerModule(MrBeanModule())
             .registerModule(module)
         val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
@@ -144,15 +195,15 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         requireNotNull(slug)
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(root, child, contentPath.child(slug))
+                            ._load(context, child, contentPath.child(slug))
                     }?.let { "children" to it }
                     slug != null -> childTypesForProperty(slug)?.get(typeIdentifier)?.let { type ->
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(root, child, contentPath.child(slug))
+                            ._load(context, child, contentPath.child(slug))
                     }?.let { slug to it }
                     else -> null
-                }
+                }?.also { context.registerLoadedContent(it.second) }
             }.filter { it != null }.toList().filterNotNull().groupBy { it.first }.toMutableMap()
         logger.info { "Children: $children -- ${ReflectionToStringBuilder.toString(children)}" }
 
@@ -164,7 +215,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 beanInstance: Any?
             ): Any? {
                 if (valueId == ContentLoaderDeserializeContext::class.java) {
-                    return ContentLoaderDeserializeContext(root, dir, contentPath)
+                    return ContentLoaderDeserializeContext(context.root, dir, contentPath)
                 }
                 require(valueId is String)
                 logger.debug {
@@ -201,6 +252,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     if (companion is Parsable<*>) {
                         val childPath = contentPath.child(slug)
                         file to LoadedContent(
+                            context,
                             companion.parseContent(file),
                             ContentDefMetadata(childPath)
                         )
@@ -222,7 +274,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         val obj = objectMapper.reader(injectableValues)
             .forType(klass.java)
             .readValue<T>(tree)
-        return LoadedContent(obj, ContentDefMetadata(
+        return LoadedContent(context, obj, ContentDefMetadata(
             contentPath,
             children.values
                 .flatten()
@@ -232,7 +284,38 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
                 .flatten()
                 .toMap()
-        ))
+        )).also { context.registerLoadedContent(it) }.also {
+            try {
+                validateBean(it.content)
+            } catch (e: Throwable) {
+                throw IllegalArgumentException("Error while checking $contentPath: ${e.message}", e)
+            }
+        }
+    }
+
+    private fun validateBean(content: Any) {
+        content.javaClass.kotlin.memberProperties.forEach {
+            if (it.returnType.toString().endsWith('!')) {
+                // veeeery hackish.. we ignore java-types and only care about kotlin types.
+                // There must be some better way to figure it out, but i haven't found it yet.
+                return@forEach
+            }
+            if (!it.isAccessible) {
+//                logger.warn { "Can't access property $it" }
+                it.isAccessible = true
+//                return@forEach
+            }
+            val x = it.get(content)
+            if (x == null) {
+                if (!it.returnType.isMarkedNullable) {
+                    throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
+                }
+            } else {
+                if (x is ContentDef) {
+                    validateBean(x)
+                }
+            }
+        }
     }
 }
 

@@ -37,12 +37,20 @@ dependencies {
     implementation("org.slf4j:jul-to-slf4j:1.7.25")
     implementation("ch.qos.logback:logback-classic:1.2.1")
 
+    // annoying image stuff
+    implementation("net.coobird:thumbnailator:0.4.8")
+
     // yaml deserialize
     compile("com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion")
+    compile("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
 
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-mrbean:$jacksonVersion")
+
+//    compile("org.hibernate.validator:hibernate-validator:6.0.14.Final")
+//    implementation("org.glassfish:javax.el:3.0.1-b09")
 
     // utils
     implementation("org.apache.commons:commons-lang3:3.8.1")
