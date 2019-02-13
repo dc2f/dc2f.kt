@@ -2,23 +2,33 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.assets.Transformer
+import com.dc2f.util.toStringReflective
 import java.net.*
 import java.nio.file.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
 
 
-abstract class Theme {
+abstract class Theme() {
 
-    val config: ThemeConfig by lazy {
-        ThemeConfig().also { configure(it) }
+    val config: ThemeConfig = ThemeConfig()
+
+    init {
+        configure(config)
     }
+
+
     abstract fun configure(config: ThemeConfig)
 
     internal fun <T: ContentDef> findRenderer(node: T): ThemeConfig.RenderConfig<*> =
         // for now we don't support having more than one renderer for each type.
-        config.renderers.single { it.canRender(node) }
+        config.renderers.first { it.canRender(node) }
 
+    /**
+     * Provide a "title" for links to this content.
+     * (a bit hackish.. maybe we could make this a bit more generic?)
+     */
+    open fun renderLinkTitle(content: ContentDef): String? = null
 }
 
 class AssetPipeline(
@@ -108,7 +118,10 @@ data class RenderContext<T : ContentDef>(
     }
 
     fun href(page: ContentDef): String {
-        return "/${metadata.childrenMetadata[page]?.path}/"
+        if (page == rootNode) {
+            return "/"
+        }
+        return "/${metadata.childrenMetadata[page]?.path ?: throw IllegalStateException("Page has no valid link? ${page.toStringReflective()}")}/"
     }
 }
 

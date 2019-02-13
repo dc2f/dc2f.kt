@@ -1,5 +1,6 @@
 package com.dc2f
 
+import com.dc2f.richtext.markdown.ValidationRequired
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
@@ -57,6 +58,9 @@ class ContentPath private constructor(
                     } + "/")
                 .build()
             )
+
+        fun parse(path: String): ContentPath =
+            fromPathComponents(path.trim('/').split('/'))
     }
 
     init {
@@ -107,11 +111,53 @@ class ContentDefMetadata(
 data class LoaderContext(
     val root: Path
 ) {
+
+    enum class LoaderPhase {
+        Loading,
+        Validating,
+        Finished,
+        ;
+
+        fun isAfter(before: LoaderPhase) =
+            (ordinal > before.ordinal)
+    }
+
+    var phase: LoaderPhase = LoaderPhase.Loading
+        private set
+
     private val contentByPathMutable = mutableMapOf<ContentPath, ContentDef>()
     val contentByPath get(): Map<ContentPath, ContentDef> = contentByPathMutable
+    private val validatorsCollector: MutableList<ValidationRequired> = mutableListOf()
+    val validators get(): List<ValidationRequired> = validatorsCollector
+    val registeredContent = mutableSetOf<ContentDef>()
+    private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
+        registerContentDef(content, content.content)
+    }
+
+    fun <T: ContentDef> registerContentDef(parent: LoadedContent<T>, content: ContentDef) {
+        if (registeredContent.add(content)) {
+            if (content is ValidationRequired) {
+                validatorsCollector.add(object : ValidationRequired {
+                    override fun validate(loaderContext: LoaderContext): String? =
+                        content.validate(loaderContext)?.let { "${parent.metadata.path}: $it" }
+                })
+            }
+        }
+    }
+
+    internal fun finishedLoadingStartValidate(metadataMap: Map<ContentDef, ContentDefMetadata>) {
+        this.metadataMap = metadataMap
+        phase = LoaderPhase.Validating
+        validators.mapNotNull { it.validate(this) }
+            .also { errors ->
+                if (errors.isNotEmpty()) {
+                    throw IllegalArgumentException("Error validating content. $errors")
+                }
+            }
+        phase = LoaderPhase.Finished
     }
 }
 
@@ -155,6 +201,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     fun load(dir: Path) =
         _load(LoaderContext(dir), dir, ContentPath.root)
+            .also { c ->
+                c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata)
+            }
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))
@@ -253,9 +302,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         val childPath = contentPath.child(slug)
                         file to LoadedContent(
                             context,
-                            companion.parseContent(file),
+                            companion.parseContent(context, file, childPath),
                             ContentDefMetadata(childPath)
-                        )
+                        ).also(context::registerLoadedContent)
                     } else {
                         null
                     }
@@ -271,9 +320,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         val tree = objectMapper.readTree(Files.readAllBytes(idxYml))
         logger.info { "tree: $tree" }
 
-        val obj = objectMapper.reader(injectableValues)
-            .forType(klass.java)
-            .readValue<T>(tree)
+        val obj = try {
+            objectMapper.reader(injectableValues)
+                .forType(klass.java)
+                .readValue<T>(tree)
+        } catch (e: Throwable) {
+            throw Exception("Error while parsing $idxYml: ${e.message}", e)
+        }
         return LoadedContent(context, obj, ContentDefMetadata(
             contentPath,
             children.values
@@ -286,18 +339,34 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 .toMap()
         )).also { context.registerLoadedContent(it) }.also {
             try {
-                validateBean(it.content)
+                validateContentDef(context, it, it.content)
             } catch (e: Throwable) {
                 throw IllegalArgumentException("Error while checking $contentPath: ${e.message}", e)
             }
         }
     }
 
-    private fun validateBean(content: Any) {
+    private fun<T: ContentDef> validateBeanIfRequired(context: LoaderContext, parent: LoadedContent<T>, content: Any?) {
+        if (content is ContentDef) {
+            validateContentDef(context, parent, content)
+        } else if (content is Collection<*>) {
+            content.forEach {
+                validateBeanIfRequired(context, parent, it)
+            }
+        }
+    }
+
+    private fun<T: ContentDef> validateContentDef(context: LoaderContext, parent: LoadedContent<T>, content: ContentDef) {
+        context.registerContentDef(parent, content)
+
         content.javaClass.kotlin.memberProperties.forEach {
             if (it.returnType.toString().endsWith('!')) {
                 // veeeery hackish.. we ignore java-types and only care about kotlin types.
                 // There must be some better way to figure it out, but i haven't found it yet.
+                return@forEach
+            }
+            if (it.isLateinit) {
+                logger.trace { "Ignoring lateinit property $it" }
                 return@forEach
             }
             if (!it.isAccessible) {
@@ -311,9 +380,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
                 }
             } else {
-                if (x is ContentDef) {
-                    validateBean(x)
-                }
+                validateBeanIfRequired(context, parent, x)
             }
         }
     }

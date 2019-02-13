@@ -1,4 +1,4 @@
-<configuration debug="true">
+<configuration>
     <!--
      logz.io grok:
      ((?<log_type>CALL)\[.*%{POSINT:duration}\]\[sql:%{INT:sql_count},%{INT:sql_duration}\] %{POSINT:http_status} %{WORD:http_status_name}: %{WORD:http_method} %{QUOTEDSTRING:path})|(%{POSINT:TIMESAMP}\|%{POSINT:duration}\|%{DATA:type}\|%{DATA:name}\|%{DATA:jdbcurl}\|%{DATA:preparedStatement}\|)

@@ -62,6 +62,7 @@ dependencies {
 
     // content parsers
     implementation("com.vladsch.flexmark:flexmark-all:0.40.16")
+    implementation("com.github.spullara.mustache.java:compiler:0.9.6")
 
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")

@@ -1,10 +1,9 @@
 package com.dc2f
 
 import com.dc2f.render.RenderContext
+import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
-import com.fasterxml.jackson.annotation.JacksonInject
-import com.vladsch.flexmark.html.HtmlRenderer
-import com.vladsch.flexmark.parser.Parser
+import com.fasterxml.jackson.annotation.*
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -25,32 +24,30 @@ interface RichText: ContentDef {
 }
 
 interface Parsable<T: ContentDef> {
-    abstract fun parseContent(file: Path): T
+    abstract fun parseContent(
+        context: LoaderContext,
+        file: Path,
+        contentPath: ContentPath
+    ): T
 }
 
-@PropertyType("md")
-class Markdown(private val content: String) : ContentDef {
+class ContentReference(private val contentPath: ContentPath) : ContentDef, ValidationRequired {
 
-    companion object : Parsable<Markdown> {
-        override fun parseContent(file: Path): Markdown {
-            return Markdown(Files.readAllLines(file).joinToString(System.lineSeparator()))
-        }
+    @JsonCreator
+    constructor(path: String) : this(ContentPath.parse(path))
 
-        val parser: Parser by lazy {
-            Parser.builder().build()
-        }
+    lateinit var referencedContent: ContentDef
+
+    override fun validate(loaderContext: LoaderContext): String? {
+        referencedContent = loaderContext.contentByPath[contentPath]
+            ?: return "Invalid content path: $contentPath"
+        return null
     }
 
-    fun summary(): String =
-        toString().substringBefore("<!--more-->")
-
-    override fun toString(): String {
-        val htmlRenderer = HtmlRenderer.builder().build()
-        val document = parser.parse(this.content)
-        return htmlRenderer.render(document)
-//        return ReflectionToStringBuilder(this).toString()
-    }
+    fun href(renderContext: RenderContext<*>): String =
+        renderContext.href(referencedContent)
 }
+
 
 open class FileAsset(val file: ContentPath, val fsPath: Path) {
     val name: String get() = fsPath.fileName.toString()
