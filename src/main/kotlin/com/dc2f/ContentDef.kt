@@ -31,6 +31,7 @@ interface Parsable<T: ContentDef> {
     ): T
 }
 
+// TODO: Maybe find a way to enforce the type of content which can be referenced?
 class ContentReference(private val contentPath: ContentPath) : ContentDef, ValidationRequired {
 
     @JsonCreator

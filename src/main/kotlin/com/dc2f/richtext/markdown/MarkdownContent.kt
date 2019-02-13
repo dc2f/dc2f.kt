@@ -56,7 +56,7 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
             return link
         }
         try {
-            if (!link.url.contains("://")) {
+            if (!link.url.contains("://") && !link.url.contains("@")) {
                 // validate internal link.
                 val loaderContext = requireNotNull(context.options[LOADER_CONTEXT])
                 val linkedContent = loaderContext.contentByPath[ContentPath.parse(link.url)]

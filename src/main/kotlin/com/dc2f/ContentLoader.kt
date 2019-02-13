@@ -317,7 +317,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
             }
 
-        val tree = objectMapper.readTree(Files.readAllBytes(idxYml))
+        // Make _index.yml optional, if there are no required (non nestable) attributes.
+        val fileContent = if (Files.exists(idxYml)) {
+            Files.readAllBytes(idxYml)
+        } else {
+            "{}".toByteArray()
+        }
+        val tree = objectMapper.readTree(fileContent)
         logger.info { "tree: $tree" }
 
         val obj = try {

@@ -1,4 +1,4 @@
-package com.dc2f.richtext.markdown
+package com.dc2f.richtext
 
 import com.dc2f.*
 import com.dc2f.render.RenderContext
@@ -7,7 +7,11 @@ import com.github.mustachejava.*
 import java.io.StringWriter
 import java.nio.file.Path
 
-data class MustacheScope(val node: ContentDef, val renderContext: RenderContext<*>)
+data class MustacheScope(
+    val node: ContentDef,
+    val renderContext: RenderContext<*>,
+    val arguments: Any?
+)
 
 @PropertyType("mustache")
 class Mustache(
@@ -26,11 +30,12 @@ class Mustache(
             Mustache(file.readString(), file, contentPath)
     }
 
-    fun renderContent(renderContext: RenderContext<*>): String {
+    fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String {
         val mustache = DefaultMustacheFactory().compile(content.reader(), path.toString())
         val output = StringWriter()
-        val node = requireNotNull(renderContext.renderer.loaderContext.contentByPath[contentPath.parent()])
-        mustache.execute(output, MustacheScope(node, renderContext))
+        val node =
+            requireNotNull(renderContext.renderer.loaderContext.contentByPath[contentPath.parent()])
+        mustache.execute(output, MustacheScope(node, renderContext, arguments))
         return output.toString()
     }
 
