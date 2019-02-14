@@ -30,7 +30,7 @@ object MarkdownDc2fExtension : HtmlRenderer.HtmlRendererExtension {
 }
 
 interface ValidationRequired {
-    fun validate(loaderContext: LoaderContext): String?
+    fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String?
 }
 
 typealias ValidationRequiredLambda = (context: LoaderContext) -> String
@@ -149,6 +149,9 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
         return renderer(context, context.renderer.loaderContext).render(doc)
     }
 
+    override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
+        renderedContent(renderContext, this.content)
+
     fun summary(context: RenderContext<*>): String {
         val summarySource = content.substringBefore("<!--more-->") {
             content.split(Regex("""\r\n\r\n|\n\n|\r\r"""), 2).first()
@@ -157,15 +160,15 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
     }
 
 
-    override fun validate(loaderContext: LoaderContext): String? {
-        try {
+    override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        return try {
             HtmlRenderer.builder(
                 options.set(LOADER_CONTEXT, loaderContext)
             ).build()
                 .render(parsedContent(loaderContext))
-            return null
+            null
         } catch (e: ValidationException) {
-            return e.message
+            e.message
         }
     }
 }

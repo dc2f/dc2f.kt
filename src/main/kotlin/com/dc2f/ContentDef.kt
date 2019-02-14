@@ -20,8 +20,11 @@ annotation class PropertyType(val identifier: String)
 
 interface ContentDef
 
-interface RichText: ContentDef {
+interface Renderable: ContentDef {
+    fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
+
+interface RichText: ContentDef, Renderable
 
 interface Parsable<T: ContentDef> {
     abstract fun parseContent(
@@ -32,14 +35,15 @@ interface Parsable<T: ContentDef> {
 }
 
 // TODO: Maybe find a way to enforce the type of content which can be referenced?
-class ContentReference(private val contentPath: ContentPath) : ContentDef, ValidationRequired {
+class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired {
 
-    @JsonCreator
-    constructor(path: String) : this(ContentPath.parse(path))
+//    @JsonCreator
+//    constructor(path: String) : this(ContentPath.parse(path))
 
     lateinit var referencedContent: ContentDef
 
-    override fun validate(loaderContext: LoaderContext): String? {
+    override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        val contentPath = parent.metadata.path.resolve(contentPathValue)
         referencedContent = loaderContext.contentByPath[contentPath]
             ?: return "Invalid content path: $contentPath"
         return null
@@ -47,6 +51,12 @@ class ContentReference(private val contentPath: ContentPath) : ContentDef, Valid
 
     fun href(renderContext: RenderContext<*>): String =
         renderContext.href(referencedContent)
+
+    fun hrefRenderable(): Renderable = object : Renderable {
+        override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
+            href(renderContext)
+
+    }
 }
 
 

@@ -74,7 +74,7 @@ class ContentPath private constructor(
     private fun builder() = URLBuilder().takeFrom(url)
 
     private val pathComponents =
-        toString().split('/').map { it.decodeURLQueryComponent() }
+        toString().decodedPathComponents
 
     fun parent() =
         fromPathComponents(pathComponents.dropLast(1))
@@ -101,7 +101,27 @@ class ContentPath private constructor(
         return url.hashCode()
     }
 
+    fun resolve(relativePath: String): ContentPath {
+        if (relativePath.startsWith('/')) {
+            return ContentPath.parse(relativePath)
+        }
+        return ContentPath.fromPathComponents((pathComponents +
+            relativePath.decodedPathComponents)
+                .fold(listOf<String>()) { acc, item ->
+                    acc.let {
+                        when(item) {
+                            "." -> acc
+                            ".." -> acc.dropLast(1)
+                            else -> acc + item
+                        }
+                    }
+                })
+    }
+
 }
+
+private val String.decodedPathComponents
+    get() = split('/').map { it.decodeURLQueryComponent() }
 
 class ContentDefMetadata(
     val path: ContentPath,
@@ -127,31 +147,30 @@ data class LoaderContext(
 
     private val contentByPathMutable = mutableMapOf<ContentPath, ContentDef>()
     val contentByPath get(): Map<ContentPath, ContentDef> = contentByPathMutable
-    private val validatorsCollector: MutableList<ValidationRequired> = mutableListOf()
-    val validators get(): List<ValidationRequired> = validatorsCollector
+    private val validatorsCollector: MutableList<(loaderContext: LoaderContext) -> String?> = mutableListOf()
+    val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
     val registeredContent = mutableSetOf<ContentDef>()
     private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
-        registerContentDef(content, content.content)
+//        registerContentDef(content, content.content)
     }
 
-    fun <T: ContentDef> registerContentDef(parent: LoadedContent<T>, content: ContentDef) {
+    fun <T: ContentDef> registerContentDef(parent: LoadedContent<T>, content: ContentDef) =
         if (registeredContent.add(content)) {
             if (content is ValidationRequired) {
-                validatorsCollector.add(object : ValidationRequired {
-                    override fun validate(loaderContext: LoaderContext): String? =
-                        content.validate(loaderContext)?.let { "${parent.metadata.path}: $it" }
-                })
+                validatorsCollector.add { loaderContext: LoaderContext ->
+                    content.validate(loaderContext, parent)?.let { "${parent.metadata.path}: $it" }
+                }
             }
-        }
-    }
+            true
+        } else { false}
 
     internal fun finishedLoadingStartValidate(metadataMap: Map<ContentDef, ContentDefMetadata>) {
         this.metadataMap = metadataMap
         phase = LoaderPhase.Validating
-        validators.mapNotNull { it.validate(this) }
+        validators.mapNotNull { it(this) }
             .also { errors ->
                 if (errors.isNotEmpty()) {
                     throw IllegalArgumentException("Error validating content. $errors")
@@ -353,10 +372,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     }
 
     private fun<T: ContentDef> validateBeanIfRequired(context: LoaderContext, parent: LoadedContent<T>, content: Any?) {
-        if (content is ContentDef) {
-            validateContentDef(context, parent, content)
-        } else if (content is Collection<*>) {
-            content.forEach {
+        when (content) {
+            is ContentDef -> validateContentDef(context, parent, content)
+            is Map<*, *> -> content.forEach { key, value ->
+                validateBeanIfRequired(context, parent, key)
+                validateBeanIfRequired(context, parent, value)
+            }
+            is Collection<*> -> content.forEach {
                 validateBeanIfRequired(context, parent, it)
             }
         }
@@ -364,6 +386,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     private fun<T: ContentDef> validateContentDef(context: LoaderContext, parent: LoadedContent<T>, content: ContentDef) {
         context.registerContentDef(parent, content)
+            || return // if the content was already registered before, no need to check it again.
 
         content.javaClass.kotlin.memberProperties.forEach {
             if (it.returnType.toString().endsWith('!')) {

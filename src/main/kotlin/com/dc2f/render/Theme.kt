@@ -123,6 +123,11 @@ data class RenderContext<T : ContentDef>(
         }
         return "/${metadata.childrenMetadata[page]?.path ?: throw IllegalStateException("Page has no valid link? ${page.toStringReflective()}")}/"
     }
+
+    fun<U: ContentDef> renderNode(content: U): String {
+//        val metadata = requireNotNull(metadata.childrenMetadata[content])
+        return renderer.renderPartialContent(content, metadata, this)
+    }
 }
 
 //open class PageRenderContext<T : ContentBranchDef<*>>(

@@ -2,6 +2,7 @@ package com.dc2f.render
 
 import com.dc2f.*
 import mu.KotlinLogging
+import java.io.StringWriter
 import java.nio.file.*
 
 
@@ -43,5 +44,18 @@ class Renderer(
                 renderer = this
             ).renderToHtml()
         }
+    }
+
+    fun renderPartialContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>): String {
+        val writer = StringWriter()
+        RenderContext(
+            rootPath = previousContext.rootPath,
+            node = node,
+            metadata = previousContext.metadata,
+            theme = theme,
+            out = writer,
+            renderer = this
+        ).renderToHtml()
+        return writer.toString()
     }
 }

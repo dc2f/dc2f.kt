@@ -30,7 +30,7 @@ class Mustache(
             Mustache(file.readString(), file, contentPath)
     }
 
-    fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String {
+    override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String {
         val mustache = DefaultMustacheFactory().compile(content.reader(), path.toString())
         val output = StringWriter()
         val node =
