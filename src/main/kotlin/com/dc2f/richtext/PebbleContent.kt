@@ -7,11 +7,6 @@ import com.mitchellbosecke.pebble.PebbleEngine
 import java.io.StringWriter
 import java.nio.file.Path
 
-data class MyContext(
-    val node: ContentDef,
-    val renderContext: RenderContext<*>
-)
-
 data class PebbleContext(
     val node: ContentDef,
     val renderContext: RenderContext<*>,
@@ -31,7 +26,7 @@ class Pebble(
 
     companion object : Parsable<Pebble> {
 
-        val engine by lazy {
+        val engine: PebbleEngine by lazy {
             PebbleEngine.Builder()
                 .strictVariables(true)
                 .cacheActive(false)
