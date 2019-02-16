@@ -71,6 +71,11 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) {
         }
         return "/$file"
     }
+    fun hrefRenderable(): Renderable = object : Renderable {
+        override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
+            href(renderContext)
+
+    }
 }
 
 enum class FillType {

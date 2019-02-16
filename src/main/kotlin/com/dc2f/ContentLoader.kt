@@ -1,6 +1,7 @@
 package com.dc2f
 
 import com.dc2f.richtext.markdown.ValidationRequired
+import com.dc2f.util.isJavaType
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
@@ -13,7 +14,7 @@ import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
 import java.nio.file.*
 import java.util.*
-import kotlin.reflect.KClass
+import kotlin.reflect.*
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.*
 import kotlin.streams.toList
@@ -125,7 +126,9 @@ private val String.decodedPathComponents
 
 class ContentDefMetadata(
     val path: ContentPath,
-    val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap()
+    val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap(),
+    // If the content is the root object of a file (_index.yml), this will contain the path to it.
+    val fsPath: Path?
 )
 
 data class LoaderContext(
@@ -151,14 +154,20 @@ data class LoaderContext(
     val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
     val registeredContent = mutableSetOf<ContentDef>()
     private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
+    private val contentByFsPath = mutableMapOf<Path, ContentPath>()
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
 //        registerContentDef(content, content.content)
     }
 
+    fun findContentPath(fsPath: Path) = contentByFsPath[fsPath]
+
     fun <T: ContentDef> registerContentDef(parent: LoadedContent<T>, content: ContentDef) =
         if (registeredContent.add(content)) {
+            if (parent.metadata.fsPath != null) {
+                contentByFsPath.putIfAbsent(parent.metadata.fsPath.toAbsolutePath(), parent.metadata.path)
+            }
             if (content is ValidationRequired) {
                 validatorsCollector.add { loaderContext: LoaderContext ->
                     content.validate(loaderContext, parent)?.let { "${parent.metadata.path}: $it" }
@@ -194,6 +203,25 @@ data class ContentLoaderDeserializeContext(
 
 class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
+    companion object {
+
+        val objectMapper = ObjectMapper(YAMLFactory())
+            .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
+            .registerKotlinModule()
+            .registerModule(JavaTimeModule())
+            .registerModule(MrBeanModule())
+            .registerModule(SimpleModule().also { module ->
+                module.addDeserializer(
+                    ImageAsset::class.java,
+                    FileAssetDeserializer(ImageAsset::class.java, ::ImageAsset)
+                )
+                module.addDeserializer(
+                    FileAsset::class.java,
+                    FileAssetDeserializer(FileAsset::class.java, ::FileAsset)
+                )
+            })
+    }
+
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
         logger.trace { "Loading childTypes for $propertyName of $klass." }
         val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
@@ -227,24 +255,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
-        val module = SimpleModule()
+//        val module = SimpleModule()
 //        module.addDeserializer(Children::class.java, ChildrenDeserializer())
 
-        module.addDeserializer(
-            ImageAsset::class.java,
-            FileAssetDeserializer(ImageAsset::class.java, ::ImageAsset)
-        )
-        module.addDeserializer(
-            FileAsset::class.java,
-            FileAssetDeserializer(FileAsset::class.java, ::FileAsset)
-        )
-
-        val objectMapper = ObjectMapper(YAMLFactory())
-            .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
-            .registerKotlinModule()
-            .registerModule(JavaTimeModule())
-            .registerModule(MrBeanModule())
-            .registerModule(module)
         val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
         val children = Files.list(dir)
             .filter { Files.isDirectory(it) }
@@ -322,7 +335,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         file to LoadedContent(
                             context,
                             companion.parseContent(context, file, childPath),
-                            ContentDefMetadata(childPath)
+                            ContentDefMetadata(childPath, fsPath = file)
                         ).also(context::registerLoadedContent)
                     } else {
                         null
@@ -361,7 +374,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         setOf(it.second.content to it.second.metadata)
                 }
                 .flatten()
-                .toMap()
+                .toMap(),
+            idxYml
         )).also { context.registerLoadedContent(it) }.also {
             try {
                 validateContentDef(context, it, it.content)
@@ -389,9 +403,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             || return // if the content was already registered before, no need to check it again.
 
         content.javaClass.kotlin.memberProperties.forEach {
-            if (it.returnType.toString().endsWith('!')) {
-                // veeeery hackish.. we ignore java-types and only care about kotlin types.
-                // There must be some better way to figure it out, but i haven't found it yet.
+            if (it.returnType.isJavaType) {
                 return@forEach
             }
             if (it.isLateinit) {

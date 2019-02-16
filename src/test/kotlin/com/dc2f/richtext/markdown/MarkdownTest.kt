@@ -13,7 +13,7 @@ class MarkdownTest {
     @Test
     fun simpleTest() {
         assertEquals(
-            Markdown.parseContentString(mockContext, "Lorem ipsum **bold**")
+            Markdown.parseContentString("Lorem ipsum **bold**")
                 .toString().trim(),
             "<p>Lorem ipsum <strong>bold</strong></p>"
         )
