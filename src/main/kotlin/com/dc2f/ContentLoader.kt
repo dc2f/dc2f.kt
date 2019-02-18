@@ -1,7 +1,7 @@
 package com.dc2f
 
 import com.dc2f.richtext.markdown.ValidationRequired
-import com.dc2f.util.isJavaType
+import com.dc2f.util.*
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
@@ -18,6 +18,7 @@ import kotlin.reflect.*
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.*
 import kotlin.streams.toList
+import kotlin.system.measureTimeMillis
 
 
 private val logger = KotlinLogging.logger {}
@@ -155,6 +156,8 @@ data class LoaderContext(
     val registeredContent = mutableSetOf<ContentDef>()
     private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
     private val contentByFsPath = mutableMapOf<Path, ContentPath>()
+    internal val lastLoadingDuration = Timing("loading")
+    internal val lastVerifyDuration = Timing("verify")
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
@@ -246,11 +249,15 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }.toMap()
     }
 
-    fun load(dir: Path) =
-        _load(LoaderContext(dir), dir, ContentPath.root)
+    fun load(dir: Path): LoadedContent<T> {
+        val context = LoaderContext(dir)
+        return context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
             .also { c ->
-                c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata)
+                context.lastVerifyDuration.measure {
+                    c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata)
+                }
             }
+    }
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))

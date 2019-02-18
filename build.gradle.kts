@@ -60,6 +60,14 @@ dependencies {
     implementation("io.ktor:ktor-http-jvm:1.1.2") // mainly for UrlBuilder
     implementation("io.ktor:ktor-http:1.1.2") // mainly for UrlBuilder
 
+    // image io for reading images - jpeg support, bmp: ico support
+    compile("com.twelvemonkeys.imageio:imageio-jpeg:3.4.1")
+    compile("com.twelvemonkeys.imageio:imageio-bmp:3.4.1")
+    compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
+    compile("org.apache.xmlgraphics:batik-transcoder:1.10")
+    compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
+
+
     // content parsers
     implementation("com.vladsch.flexmark:flexmark-all:0.40.16")
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")

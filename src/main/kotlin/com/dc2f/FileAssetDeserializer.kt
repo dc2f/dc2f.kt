@@ -14,8 +14,9 @@ class FileAssetDeserializer<T : FileAsset>(vc: Class<T>, val producer: (path: Co
         val value = _parseString(p, ctxt)
         val context = ctxt.findInjectableValue(ContentLoaderDeserializeContext::class.java, null, null) as ContentLoaderDeserializeContext
         // currently 'value' can only be in the current folder.
-        val path = context.currentContentPath.child(value)
-        // TODO very lazy here.. it should be somehow possible to resolve actual file from ContentPath
+        val path = context.currentContentPath.resolve(value)
+        //TODO: very lazy here.. it should be somehow possible to resolve actual file from ContentPath
+        //   - fwiw, i think this is already solved. (by using `ContentPath.resolve` instead of `child`)
         val fsPath = context.currentFsPath.resolve(value)
         if (!Files.exists(fsPath)) {
             throw IllegalArgumentException("Unable to find asset $path - expected to find it at $fsPath.")

@@ -3,6 +3,7 @@ package com.dc2f.richtext.markdown
 import com.dc2f.*
 import com.dc2f.render.RenderContext
 import com.dc2f.util.*
+import com.vladsch.flexmark.ext.typographic.TypographicExtension
 import com.vladsch.flexmark.ext.xwiki.macros.*
 import com.vladsch.flexmark.html.*
 import com.vladsch.flexmark.html.renderer.*
@@ -122,7 +123,11 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
 //                .set(MacroExtension.ENABLE_RENDERING, true)
                 .set(MacroExtension.ENABLE_INLINE_MACROS, true)
                 .set(MacroExtension.ENABLE_BLOCK_MACROS, true)
-                .set(Parser.EXTENSIONS, listOf(MacroExtension.create(), MarkdownDc2fExtension))
+                .set(Parser.EXTENSIONS, listOf(
+                    MacroExtension.create(),
+                    MarkdownDc2fExtension,
+                    TypographicExtension.create()
+                    ))
         }
 
         val parser: Parser by lazy {
