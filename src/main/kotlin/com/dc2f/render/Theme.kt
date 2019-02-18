@@ -3,10 +3,10 @@ package com.dc2f.render
 import com.dc2f.*
 import com.dc2f.assets.Transformer
 import com.dc2f.util.toStringReflective
-import java.net.*
+import java.net.URI
 import java.nio.file.*
 import kotlin.reflect.KClass
-import kotlin.reflect.full.*
+import kotlin.reflect.full.isSuperclassOf
 
 
 abstract class Theme() {
@@ -74,13 +74,12 @@ data class RenderContext<T : ContentDef>(
     val metadata: ContentDefMetadata,
     val theme: Theme,
     val out: Appendable,
-    val renderer: Renderer
+    val renderer: Renderer,
+    val enclosingNode: ContentDef? = null
 ) {
     val content get() = node
     val context get() = this
-    val rootNode get() = requireNotNull(renderer.loaderContext.contentByPath[ContentPath.root]) {
-        "wanted to resolve ${ContentPath.root} - available: ${renderer.loaderContext.contentByPath.entries}"
-    }
+    val rootNode get() = renderer.loaderContext.rootNode
 
     fun renderToHtml() {
         @Suppress("UNCHECKED_CAST")

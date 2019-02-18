@@ -18,6 +18,11 @@ plugins {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
+}
+
+tasks.named<Test>("test") {
+    useJUnitPlatform()
 }
 
 
@@ -66,10 +71,12 @@ dependencies {
     compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
     compile("org.apache.xmlgraphics:batik-transcoder:1.10")
     compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
+    implementation("com.ibm.icu:icu4j:63.1")
 
 
     // content parsers
     implementation("com.vladsch.flexmark:flexmark-all:0.40.16")
+    implementation("org.jodd:jodd-bean:5.0.8") // for resolving paths
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")
     implementation("io.pebbletemplates:pebble:3.0.8")
 
@@ -83,4 +90,8 @@ dependencies {
 
     // Use the Kotlin JUnit integration
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.1.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.1.0")
+
+    testImplementation("io.mockk:mockk:1.9.1")
 }

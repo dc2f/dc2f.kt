@@ -2,6 +2,7 @@ package com.dc2f.richtext.markdown
 
 import com.dc2f.*
 import com.dc2f.render.RenderContext
+import com.dc2f.richtext.*
 import com.dc2f.util.*
 import com.vladsch.flexmark.ext.typographic.TypographicExtension
 import com.vladsch.flexmark.ext.xwiki.macros.*
@@ -11,6 +12,7 @@ import com.vladsch.flexmark.parser.Parser
 import com.vladsch.flexmark.util.ast.*
 import com.vladsch.flexmark.util.html.Attributes
 import com.vladsch.flexmark.util.options.*
+import jodd.bean.BeanUtil
 import mu.KotlinLogging
 import java.nio.file.*
 
@@ -86,18 +88,52 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
 //            throw ValidationException("Invalid link (malformed URL): ${link.toStringReflective()}, ${e.message}", e)
         }
         logger.debug { "We need to resolve link ${link.toStringReflective()} for $node" }
-        return link.withStatus(LinkStatus.INVALID).withUrl("SomethingElse")
+        // absolute links are kept as they are...
+        return link
     }
 
 }
 
 
+/*
+TODO the markdown renderer has quite a few problems
+ - {{ render /}} won't render at all (space after {{)
+ - {{ render content=test-test }} .. no '-' allowed in attribute values? (maybe makes sense?)
+ - generally it does not fail for broken macros.
+ - it should be easier to reference content.
+ */
 class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
+
+    fun render(param: Macro, nodeRendererContext: NodeRendererContext, html: HtmlWriter) {
+        logger.debug { "Rendering ${param.name} with: ${param.attributeText}" }
+
+        @Suppress("ReplaceCallWithBinaryOperator")
+        if (!param.name.equals("render")) {
+            logger.debug { "Unsupported macro ${param.name}" }
+            throw IllegalArgumentException("Unsupported macro in markdown context. ${param.name}")
+        }
+
+        val loaderContext = nodeRendererContext.options[LOADER_CONTEXT]
+
+        if (!loaderContext.phase.isAfter(LoaderContext.LoaderPhase.Validating)) {
+            // we are in validation step. do not do anything yet.
+            // TODO validate content.
+            return
+        }
+
+        val renderContext = nodeRendererContext.options[RENDER_CONTEXT]
+        val context = RichTextContext(renderContext.node, renderContext.renderer.loaderContext, renderContext, null)
+        val contentPath = param.attributes["content"]
+
+        val result: Any = BeanUtil.pojo.getProperty(context, contentPath)
+        html.append(RichText.render(result, renderContext))
+    }
+
     override fun getNodeRenderingHandlers(): MutableSet<NodeRenderingHandler<*>> =
         mutableSetOf(
-            NodeRenderingHandler<Macro>(Macro::class.java) { param, nodeRendererContext: NodeRendererContext, html: HtmlWriter ->
-                println("Rendering $param")
-                html.text("Lorem ips<a >um.")
+            NodeRenderingHandler<Macro>(Macro::class.java, ::render),
+            NodeRenderingHandler<MacroBlock>(MacroBlock::class.java) { param: MacroBlock, nodeRendererContext: NodeRendererContext, htmlWriter: HtmlWriter ->
+                render(param.macroNode, nodeRendererContext, htmlWriter)
             }
         )
 

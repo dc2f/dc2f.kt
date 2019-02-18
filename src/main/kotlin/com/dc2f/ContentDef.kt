@@ -3,7 +3,7 @@ package com.dc2f
 import com.dc2f.render.RenderContext
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
-import com.fasterxml.jackson.annotation.*
+import com.fasterxml.jackson.annotation.JacksonInject
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -24,7 +24,31 @@ interface Renderable: ContentDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
 
-interface RichText: ContentDef, Renderable
+class Slug private constructor(private val value: String) : ContentDef, ValidationRequired {
+    val slug: String get() = value
+
+    override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        return null
+    }
+
+    companion object {
+        val VALID_SLUG = Regex("^[a-zA-Z0-9_-]+$")
+    }
+    init {
+        require(value.matches(VALID_SLUG)) {
+            "Not a valid slug: $value (must adhere to pattern: $VALID_SLUG"
+        }
+    }
+}
+
+interface SlugCustomization {
+    val slug: Slug?
+
+    @JvmDefault
+    fun slugGenerationValue(): String? = null
+    @JvmDefault
+    fun createSlug() = slug?.slug ?: slugGenerationValue()?.let { Slugify().slugify(it) }
+}
 
 interface Parsable<T: ContentDef> {
     abstract fun parseContent(

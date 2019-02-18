@@ -14,11 +14,10 @@ import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
 import java.nio.file.*
 import java.util.*
-import kotlin.reflect.*
+import kotlin.reflect.KClass
 import kotlin.reflect.full.*
-import kotlin.reflect.jvm.*
+import kotlin.reflect.jvm.isAccessible
 import kotlin.streams.toList
-import kotlin.system.measureTimeMillis
 
 
 private val logger = KotlinLogging.logger {}
@@ -29,41 +28,36 @@ data class LoadedContent<T : ContentDef>(
     val metadata: ContentDefMetadata
 )
 
-/**
- * ContentPath's are used to identify the location of Content. Each content
- * has a unique path which can be used for identification. It works similar
- * to a file system path.
- *
- * Use [toString] to convert to an external form. The root will always be an
- * empty string `""`, while otherwise it will be `example/path` with path segments
- * encoded and separated by `/`. (Guaranteed that it will not start or end in `/`)
- */
-class ContentPath private constructor(
+abstract class AbstractPathCompanion<T: AbstractPath<T>> {
+
+    abstract val construct: (url: Url) -> T
+
+    val root get() = construct(rootBuilder.build())
+
+    protected val rootBuilder
+        get() = URLBuilder(
+            protocol = URLProtocol("dc2f", 8822),
+            host = "content"
+        )
+
+    fun parse(path: String): T =
+        fromPathComponents(path.trim('/').split('/'))
+
+    internal fun fromPathComponents(pathComponents: Iterable<String>) =
+        construct(rootBuilder
+            .takeFrom(
+                pathComponents.joinToString("/") {
+                    it.encodeURLQueryComponent()
+                } + "/")
+            .build()
+        )
+}
+
+open class AbstractPath<T: AbstractPath<T>>
+    protected constructor(
+        val companion: AbstractPathCompanion<T>,
     /// implementation detail: We use the ktor Url internally to handle resolving, etc.
-    private val url: Url
-) {
-
-    companion object {
-        val root get() = ContentPath(rootBuilder.build())
-
-        private val rootBuilder
-            get() = URLBuilder(
-                protocol = URLProtocol("dc2f", 8822),
-                host = "content"
-            )
-
-        private fun fromPathComponents(pathComponents: Iterable<String>) =
-            ContentPath(rootBuilder
-                .takeFrom(
-                    pathComponents.joinToString("/") {
-                        it.encodeURLQueryComponent()
-                    } + "/")
-                .build()
-            )
-
-        fun parse(path: String): ContentPath =
-            fromPathComponents(path.trim('/').split('/'))
-    }
+        protected val url: Url) {
 
     init {
         assert(url.encodedPath.endsWith('/'))
@@ -73,15 +67,17 @@ class ContentPath private constructor(
     val isRoot
         get() = url.encodedPath == "/"
 
+    val name get() = pathComponents.last()
+
     private fun builder() = URLBuilder().takeFrom(url)
 
-    private val pathComponents =
+    private val pathComponents get() =
         toString().decodedPathComponents
 
     fun parent() =
-        fromPathComponents(pathComponents.dropLast(1))
+        companion.fromPathComponents(pathComponents.dropLast(1))
 
-    fun child(pathComponent: String) = ContentPath(
+    fun child(pathComponent: String) = companion.construct(
         builder()
             .takeFrom(pathComponent.encodeURLQueryComponent() + "/")
             .build()
@@ -109,15 +105,35 @@ class ContentPath private constructor(
         }
         return ContentPath.fromPathComponents((pathComponents +
             relativePath.decodedPathComponents)
-                .fold(listOf<String>()) { acc, item ->
-                    acc.let {
-                        when(item) {
-                            "." -> acc
-                            ".." -> acc.dropLast(1)
-                            else -> acc + item
-                        }
+            .fold(listOf<String>()) { acc, item ->
+                acc.let {
+                    when(item) {
+                        "." -> acc
+                        ".." -> acc.dropLast(1)
+                        else -> acc + item
                     }
-                })
+                }
+            })
+    }
+
+}
+
+/**
+ * ContentPath's are used to identify the location of Content. Each content
+ * has a unique path which can be used for identification. It works similar
+ * to a file system path.
+ *
+ * Use [toString] to convert to an external form. The root will always be an
+ * empty string `""`, while otherwise it will be `example/path` with path segments
+ * encoded and separated by `/`. (Guaranteed that it will not start or end in `/`)
+ */
+open class ContentPath protected constructor(
+    /// implementation detail: We use the ktor Url internally to handle resolving, etc.
+    url: Url
+) : AbstractPath<ContentPath>(ContentPath.Companion, url) {
+
+    companion object : AbstractPathCompanion<ContentPath>() {
+        override val construct = ::ContentPath
     }
 
 }
@@ -159,6 +175,11 @@ data class LoaderContext(
     internal val lastLoadingDuration = Timing("loading")
     internal val lastVerifyDuration = Timing("verify")
 
+    /** Only valid after loading is finished. */
+    val rootNode get() = requireNotNull(contentByPath[ContentPath.root]) {
+        "wanted to resolve ${ContentPath.root} - available: ${contentByPath.entries}"
+    }
+
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
 //        registerContentDef(content, content.content)
@@ -189,6 +210,14 @@ data class LoaderContext(
                 }
             }
         phase = LoaderPhase.Finished
+    }
+
+    fun findContentPath(content: ContentDef) = run {
+        assert(phase.isAfter(LoaderPhase.Loading))
+        // every content must be registered in the metadataMap
+        requireNotNull(metadataMap[content]) {
+            "Unable to find path for content ${content.toStringReflective(maxDepth = 2)}"
+        }.path
     }
 }
 
@@ -254,7 +283,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         return context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
             .also { c ->
                 context.lastVerifyDuration.measure {
-                    c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata)
+                    c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
                 }
             }
     }

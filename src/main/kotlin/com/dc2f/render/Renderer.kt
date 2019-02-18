@@ -2,12 +2,22 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.util.Timing
+import io.ktor.http.Url
 import mu.KotlinLogging
 import java.io.StringWriter
 import java.nio.file.*
 
 
 private val logger = KotlinLogging.logger {}
+
+class RenderPath private constructor(url: Url) : AbstractPath<RenderPath>(RenderPath.Companion, url) {
+
+    companion object : AbstractPathCompanion<RenderPath>() {
+        override val construct get() = ::RenderPath
+    }
+
+}
+
 
 class Renderer(
     private val theme: Theme,
@@ -41,8 +51,21 @@ class Renderer(
         logger.info { Timing.allTimings.joinToString(System.lineSeparator() + "    ", prefix = "${System.lineSeparator()}    ") { it.toString() } }
     }
 
+    fun findRenderPath(node: ContentDef): RenderPath {
+        val contentPath = loaderContext.findContentPath(node)
+        if (contentPath.isRoot) {
+            return RenderPath.root
+        }
+        val parent = findRenderPath(requireNotNull(loaderContext.contentByPath[contentPath.parent()]))
+
+        val slug = (node as? SlugCustomization)?.createSlug()
+            ?:contentPath.name
+        return parent.child(slug)
+    }
+
     fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null) {
-        val dir = target.resolve(metadata.path.toString())
+        val renderPath = findRenderPath(node)
+        val dir = target.resolve(renderPath.toString())
         Files.createDirectories(dir)
         Files.newBufferedWriter(dir.resolve("index.html")).use { writer ->
             RenderContext(
@@ -64,7 +87,8 @@ class Renderer(
             metadata = previousContext.metadata,
             theme = theme,
             out = writer,
-            renderer = this
+            renderer = this,
+            enclosingNode = previousContext.node
         ).renderToHtml()
         return writer.toString()
     }
