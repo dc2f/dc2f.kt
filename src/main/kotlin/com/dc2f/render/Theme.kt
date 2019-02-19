@@ -116,12 +116,11 @@ data class RenderContext<T : ContentDef>(
         }
     }
 
-    fun href(page: ContentDef): String {
-        if (page == rootNode) {
-            return "/"
+    fun href(page: ContentDef): String =
+        when (val path = renderer.findRenderPath(page)) {
+            RenderPath.root -> "/"
+            else -> "/$path/"
         }
-        return "/${metadata.childrenMetadata[page]?.path ?: throw IllegalStateException("Page has no valid link? ${page.toStringReflective()}")}/"
-    }
 
     fun<U: ContentDef> renderNode(content: U): String {
 //        val metadata = requireNotNull(metadata.childrenMetadata[content])

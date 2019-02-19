@@ -89,7 +89,7 @@ open class AbstractPath<T: AbstractPath<T>>
         url.encodedPath.trim('/')
 
     override fun equals(other: Any?): Boolean {
-        if (other is ContentPath) {
+        if (other is AbstractPath<*>) {
             return other.url == url
         }
         return super.equals(other)

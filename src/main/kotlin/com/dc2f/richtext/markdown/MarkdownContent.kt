@@ -126,7 +126,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
         val contentPath = param.attributes["content"]
 
         val result: Any = BeanUtil.pojo.getProperty(context, contentPath)
-        html.append(RichText.render(result, renderContext))
+        html.rawPre(RichText.render(result, renderContext))
     }
 
     override fun getNodeRenderingHandlers(): MutableSet<NodeRenderingHandler<*>> =
