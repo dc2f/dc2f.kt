@@ -1,6 +1,6 @@
 package com.dc2f
 
-import com.dc2f.render.RenderContext
+import com.dc2f.render.*
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
 import com.fasterxml.jackson.annotation.JacksonInject
@@ -84,16 +84,31 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 }
 
 
-open class FileAsset(val file: ContentPath, val fsPath: Path) {
+open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, ValidationRequired {
+
     val name: String get() = fsPath.fileName.toString()
 
+    private lateinit var container: ContentDef
+
+    override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        container = loaderContext.contentByPath[file.parent()] ?: return "Unable to find parent of file asset $file"
+        return null
+    }
+
+    protected fun getTargetOutputPath(context: RenderContext<*>, fileName: String = name): Pair<RenderPath, Path> {
+        val containerPath = context.renderer.findRenderPath(container)
+        val renderPath = containerPath.child(fileName)
+
+        return renderPath to context.rootPath.resolve(renderPath.toString())
+    }
+
     fun href(context: RenderContext<*>): String {
-        val targetPath = context.rootPath.resolve(file.toString())
+        val (renderPath, targetPath) = getTargetOutputPath(context)
         Files.createDirectories(targetPath.parent)
         if (!Files.exists(targetPath)) {
             Files.copy(fsPath, targetPath)
         }
-        return "/$file"
+        return "/$renderPath"
     }
     fun hrefRenderable(): Renderable = object : Renderable {
         override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
@@ -151,8 +166,7 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
     fun resize(context: RenderContext<*>, width: Int, height: Int, fillType: FillType): ResizedImage {
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
-        val targetContentPath = file.sibling(fileName)
-        val targetPath = targetPathOrig.resolveSibling(fileName)
+        val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
 
         val original = ImageIO.read(fsPath.toFile())
 //        val targetSize = ImageSize(original.width, original.height)
@@ -163,10 +177,11 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
             FillType.Fit -> thumbnails.size(width, height)
             FillType.Transform -> thumbnails.forceSize(width, height)
         }
+        Files.createDirectories(targetPath.parent)
         thumbnails.toFile(targetPath.toFile())
 //        thumbnails.addFilter()
         return ResizedImage(
-            "/$targetContentPath",
+            "/$renderPath",
             width,
             height)
     }
