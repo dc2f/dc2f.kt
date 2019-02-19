@@ -7,6 +7,7 @@ import com.fasterxml.jackson.annotation.JacksonInject
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
+import net.coobird.thumbnailator.tasks.io.FileImageSink
 import java.lang.annotation.Inherited
 import java.nio.file.*
 import javax.imageio.ImageIO
@@ -178,12 +179,15 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
             FillType.Transform -> thumbnails.forceSize(width, height)
         }
         Files.createDirectories(targetPath.parent)
-        thumbnails.toFile(targetPath.toFile())
+        val thumbnailImage = thumbnails.asBufferedImage()
+
+        FileImageSink(targetPath.toFile()).write(thumbnailImage)
+//        thumbnails.toFile(targetPath.toFile())
 //        thumbnails.addFilter()
         return ResizedImage(
             "/$renderPath",
-            width,
-            height)
+            thumbnailImage.width,
+            thumbnailImage.height)
     }
 
     private fun parseImage() =

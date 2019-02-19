@@ -2,9 +2,11 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.assets.Transformer
-import com.dc2f.util.toStringReflective
+import com.google.common.io.*
+import java.io.File
 import java.net.URI
 import java.nio.file.*
+import java.nio.file.Files
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSuperclassOf
 
@@ -31,33 +33,43 @@ abstract class Theme() {
     open fun renderLinkTitle(content: ContentDef): String? = null
 }
 
+@Suppress("UnstableApiUsage")
 class AssetPipeline(
     private val context: RenderContext<*>,
-    private val sourceUri: URI
+    private val renderCharAsset: RenderCharAsset
 ) {
 
     private val pipeline = mutableListOf<Transformer>()
 
-    fun href(outputPath: String): String = runTransformations(outputPath)
+    fun href(outputDirectory: RenderPath): String = "/${runTransformations(outputDirectory)}"
 
-    private fun runTransformations(outputPath: String): String {
+    private fun runTransformations(outputDirectory: RenderPath): RenderPath {
         // we currently only support one pipeline step.. don't ask.
-        val absPath = context.rootPath.resolve(outputPath)
-        Files.createDirectories(absPath.parent);
 
-        if (pipeline.isEmpty()) {
-            if (!Files.exists(absPath)) {
-                Files.copy(Paths.get(sourceUri), absPath)
-            }
-            return "/$outputPath"
+//        if (pipeline.isEmpty()) {
+//            if (!Files.exists(absPath)) {
+//                renderCharAsset.contentReader.copyTo(MoreFiles.asCharSink(absPath, Charsets.UTF_8))
+//            }
+//            return "/$outputPath"
+//        }
+
+        val result = pipeline.fold(renderCharAsset) { last, transformer ->
+            transformer.transform(last)
         }
 
-        if (!Files.exists(absPath)) {
-            val outputUri = absPath.toUri()
-            pipeline[0].transform(sourceUri, outputUri)
-        }
+        val renderPath = outputDirectory.child(result.fileName)
+
+        val absFsPath = context.rootPath.resolve(renderPath.toString())
+        Files.createDirectories(absFsPath.parent)
+
+        result.contentReader.copyTo(MoreFiles.asCharSink(absFsPath, Charsets.UTF_8))
+//        if (!Files.exists(absPath)) {
+//            val outputUri = absPath.toUri()
+//            pipeline[0].transform(renderCharAsset)
+//        }
 //        Files.write(context.rootPath.resolve(outputPath), output.toByteArray())
-        return "/$outputPath"
+//        return "/$outputPath"
+        return renderPath
     }
 
     fun transform(transformer: Transformer): AssetPipeline {
@@ -66,6 +78,10 @@ class AssetPipeline(
     }
 }
 
+class RenderCharAsset(
+    val contentReader: CharSource,
+    val fileName: String
+)
 
 data class RenderContext<T : ContentDef>(
     val rootPath: Path,
@@ -93,14 +109,22 @@ data class RenderContext<T : ContentDef>(
         (this  as RenderContext<U>).copy(node = node)
 
     fun getAsset(path: String): AssetPipeline {
+        // TODO add caching
         val resource =
             theme.javaClass.classLoader.getResource(path)?.toURI()
                 ?: getResourceFromFileSystem(path)
+        @Suppress("UnstableApiUsage")
         return AssetPipeline(
-            this, resource)
+            this,
+            RenderCharAsset(
+                Resources.asCharSource(resource.toURL(), Charsets.UTF_8),
+                File(resource.toURL().file).name
+            )
+        )
     }
 
-    private fun getResourceFromFileSystem(path: String): URI {
+    fun getResourceFromFileSystem(path: String): URI {
+        // TODO kinda hackish, don't you think?
         val root = FileSystems.getDefault().getPath("src", "main", "resources")
         val resource = root.resolve(path)
         if (!Files.exists(resource)) {
