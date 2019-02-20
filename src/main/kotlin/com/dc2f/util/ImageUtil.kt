@@ -3,6 +3,7 @@ package com.dc2f.util
 import mu.KotlinLogging
 import java.awt.Color
 import java.awt.image.BufferedImage
+import java.io.Serializable
 import java.net.URL
 import java.nio.file.*
 import javax.imageio.ImageIO
@@ -16,7 +17,7 @@ data class ImageInfo(
     val mimeTypes: List<String>,
     val fileName: String,
     val brightnessRatio: Double?
-)
+) : Serializable
 
 object ImageUtil {
     fun readImageData(path: Path): ImageInfo? {

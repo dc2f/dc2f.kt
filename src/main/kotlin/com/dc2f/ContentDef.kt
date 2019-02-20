@@ -8,8 +8,13 @@ import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
 import net.coobird.thumbnailator.tasks.io.FileImageSink
+import org.ehcache.Cache
+import org.ehcache.config.builders.*
+import org.ehcache.config.units.*
+import java.io.Serializable
 import java.lang.annotation.Inherited
 import java.nio.file.*
+import java.util.*
 import javax.imageio.ImageIO
 
 private val logger = KotlinLogging.logger {}
@@ -163,35 +168,110 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
     val imageInfo: ImageInfo by lazy { parseImage() }
     val width get() = imageInfo.width
     val height get() = imageInfo.height
+    private val fileSize by lazy { Files.size(fsPath) }
+
+    companion object {
+        val cachePath: Path by lazy {
+            CacheUtil.cacheDirectory.toPath().resolve("dc2f-image-resize")
+                .also { Files.createDirectories(it) }
+        }
+    }
 
     fun resize(context: RenderContext<*>, width: Int, height: Int, fillType: FillType): ResizedImage {
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
         val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
 
-        val original = ImageIO.read(fsPath.toFile())
-//        val targetSize = ImageSize(original.width, original.height)
-//            .resize(width, height, fillType)
-        val thumbnails = Thumbnails.of(original)
-        when(fillType) {
-            FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
-            FillType.Fit -> thumbnails.size(width, height)
-            FillType.Transform -> thumbnails.forceSize(width, height)
-        }
-        Files.createDirectories(targetPath.parent)
-        val thumbnailImage = thumbnails.asBufferedImage()
+        val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name)
+        val cachedData = ImageCache.imageResizeCache.get(cacheKey)
+            ?: {
+                logger.info { "Image not found in cache. need to recompute $cacheKey" }
+                val original = ImageIO.read(fsPath.toFile())
+                val thumbnails = Thumbnails.of(original)
+                when(fillType) {
+                    FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
+                    FillType.Fit -> thumbnails.size(width, height)
+                    FillType.Transform -> thumbnails.forceSize(width, height)
+                }
+                val thumbnailImage = thumbnails.asBufferedImage()
 
-        FileImageSink(targetPath.toFile()).write(thumbnailImage)
+                val cachedFileName = "${file.name}.${UUID.randomUUID()}.${targetPathOrig.fileName}"
+
+                FileImageSink(cachePath.resolve(cachedFileName).toFile()).write(thumbnailImage)
+
+                ImageResizeCacheData(cachedFileName, thumbnailImage.width, thumbnailImage.height)
+                    .also { ImageCache.imageResizeCache.put(cacheKey, it) }
+            }()
+
+        if (!Files.exists(targetPath)) {
+            Files.createDirectories(targetPath.parent)
+            Files.createLink(targetPath, cachePath.resolve(cachedData.cachedFileName))
+//            Files.copy(cachePath.resolve(cachedData.cachedFileName), targetPath)
+        }
+
+        doResize()
+
 //        thumbnails.toFile(targetPath.toFile())
 //        thumbnails.addFilter()
         return ResizedImage(
             "/$renderPath",
-            thumbnailImage.width,
-            thumbnailImage.height)
+            cachedData.width,
+            cachedData.height)
+    }
+
+    private fun doResize() {
     }
 
     private fun parseImage() =
-        ImageUtil.readImageData(fsPath) ?: throw IllegalArgumentException("Invalid image at $fsPath")
+        ImageCache.imageInfoCache.cached(
+            ImageInfoCacheKey(
+                fsPath.toString(),
+                fileSize)
+        ) {
+            ImageUtil.readImageData(fsPath)
+                ?: throw IllegalArgumentException("Invalid image at $fsPath")
+        }
+
+}
+
+data class ImageInfoCacheKey(val imageFsPath: String, val imageFileSize: Long) : Serializable
+data class ImageResizeCacheKey(val imageContentPath: String, val imageFileSize: Long, val width: Int, val height: Int, val fillTypeName: String) : Serializable
+data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val height: Int) : Serializable
+
+object ImageCache {
+
+    init {
+        CacheManagerBuilder.newCacheManagerBuilder()
+    }
+
+    val imageInfoCache: Cache<ImageInfoCacheKey, ImageInfo> by lazy {
+        CacheUtil.cacheManager
+            .createCache(
+                "imageInfoCache",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(
+                    ImageInfoCacheKey::class.java,
+                    ImageInfo::class.java,
+                    ResourcePoolsBuilder.newResourcePoolsBuilder()
+//                        .heap(50, EntryUnit.ENTRIES)
+                        .disk(50, MemoryUnit.MB, true)
+                ))
+
+    }
+
+    val imageResizeCache: Cache<ImageResizeCacheKey, ImageResizeCacheData> by lazy {
+        CacheUtil.cacheManager
+            .createCache(
+                "imageResizeCache",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(
+                    ImageResizeCacheKey::class.java,
+                    ImageResizeCacheData::class.java,
+                    ResourcePoolsBuilder.newResourcePoolsBuilder()
+//                        .heap(50, EntryUnit.ENTRIES)
+                        .disk(50, MemoryUnit.MB, true)
+                ))
+    }
+
+
 }
 
 //@JsonDeserialize(using = ChildrenDeserializer::class)

@@ -1,7 +1,7 @@
 package com.dc2f.render
 
 import com.dc2f.*
-import com.dc2f.util.Timing
+import com.dc2f.util.*
 import io.ktor.http.Url
 import mu.KotlinLogging
 import java.io.StringWriter
@@ -49,6 +49,8 @@ class Renderer(
         }
         logger.info { "Finished rendering." }
         logger.info { Timing.allTimings.joinToString(System.lineSeparator() + "    ", prefix = "${System.lineSeparator()}    ") { it.toString() } }
+        logger.info { "cache Stats: ${CacheUtil.allStatistics}" }
+        CacheUtil.cacheManager.close()
     }
 
     fun findRenderPath(node: ContentDef): RenderPath {

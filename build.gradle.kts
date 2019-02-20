@@ -85,6 +85,9 @@ dependencies {
     // preprocessors
     implementation("io.bit3:jsass:5.7.3")
 
+    // caching
+    implementation("org.ehcache:ehcache:3.6.1")
+
     // Use the Kotlin test library
     testImplementation("org.jetbrains.kotlin:kotlin-test")
 
