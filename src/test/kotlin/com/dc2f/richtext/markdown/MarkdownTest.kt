@@ -33,8 +33,8 @@ class MarkdownTest {
                     mockk<LoadedContent<ContentDef>>())
             }
 
-    private fun assertMarkdown(expected: String, source: String) =
-        assertEquals(expected, markdown(source).renderedContent(renderContext).trim())
+    private fun assertMarkdown(expected: String, source: String, asInlineContent: Boolean = false) =
+        assertEquals(expected, markdown(source).renderedContent(renderContext, asInlineContent = asInlineContent).trim())
 
     @Test
     fun simpleTest() {
@@ -59,6 +59,15 @@ class MarkdownTest {
         assertMarkdown(
             "<p>test render CONSTANT STUFF</p>",
             "test render {{render content=rootNode.embed.foobar/}}"
+        )
+    }
+
+    @Test
+    fun simpleInlineContent() {
+        assertMarkdown(
+            "test <code>simple</code> markdown",
+            "test `simple` markdown",
+            asInlineContent = true
         )
     }
 

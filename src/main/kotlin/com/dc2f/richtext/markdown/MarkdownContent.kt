@@ -178,16 +178,32 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
         return parser.parse(content)
     }
 
-    private fun renderer(renderContext: RenderContext<*>?, loaderContext: LoaderContext) =
+    private fun renderer(renderContext: RenderContext<*>?, loaderContext: LoaderContext, asInlineContent: Boolean = false) =
         HtmlRenderer.builder(
             options
                 .set(LOADER_CONTEXT, loaderContext)
                 .set(RENDER_CONTEXT, renderContext)
+                .set(HtmlRenderer.NO_P_TAGS_USE_BR, asInlineContent)
         ).build()
 
-    fun renderedContent(context: RenderContext<*>, content: String = this.content): String {
+    fun renderedContent(context: RenderContext<*>, content: String = this.content, asInlineContent: Boolean = false): String {
         val doc = parsedContent(context.renderer.loaderContext, content = content)
-        return renderer(context, context.renderer.loaderContext).render(doc)
+
+        return renderer(
+            context,
+            context.renderer.loaderContext,
+            asInlineContent = asInlineContent
+        ).render(doc)
+            .let { html ->
+                if (asInlineContent) {
+                    html.trim().let {
+                        require(it.endsWith("<br /><br />"))
+                        it.substring(0, it.length - "<br /><br />".length)
+                    }
+                } else {
+                    html
+                }
+            }
     }
 
     override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =

@@ -150,6 +150,19 @@ data class RenderContext<T : ContentDef>(
 //        val metadata = requireNotNull(metadata.childrenMetadata[content])
         return renderer.renderPartialContent(content, metadata, this)
     }
+
+    inline fun<reified U: T> nodeType(): RenderContext<U>? {
+        if (node is U) {
+            @Suppress("UNCHECKED_CAST")
+            return this as RenderContext<U>
+        } else {
+            return null
+        }
+    }
+
+    inline fun <reified U: T, RET> ifType(block: RenderContext<U>.() -> RET): RET? {
+        return nodeType<U>()?.let(block)
+    }
 }
 
 //open class PageRenderContext<T : ContentBranchDef<*>>(
