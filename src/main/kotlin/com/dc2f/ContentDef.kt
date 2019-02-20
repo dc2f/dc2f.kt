@@ -182,6 +182,8 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
         val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
 
+        // FIXME: 1.) implement some way to clean up old resized images.
+        //        2.) if because of some reason there is a cache entry, but no resized file, we have to resize it again.
         val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name)
         val cachedData = ImageCache.imageResizeCache.get(cacheKey)
             ?: {
