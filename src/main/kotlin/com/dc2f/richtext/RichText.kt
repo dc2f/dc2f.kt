@@ -14,6 +14,7 @@ interface RichText: ContentDef, Renderable {
                 is Renderable -> content.renderContent(renderContext)
                 is ContentReference -> render(content.referencedContent, renderContext)
                 is ContentDef -> renderContext.renderNode(content)
+                is String -> content
                 else -> throw IllegalArgumentException("Unable to render ${content?.toStringReflective()} (unknown type)")
             }
     }

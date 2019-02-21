@@ -97,4 +97,5 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.1.0")
 
     testImplementation("io.mockk:mockk:1.9.1")
+    testImplementation("com.willowtreeapps.assertk:assertk-jvm:0.13")
 }

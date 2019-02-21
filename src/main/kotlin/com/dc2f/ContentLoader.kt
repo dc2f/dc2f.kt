@@ -83,6 +83,17 @@ open class AbstractPath<T: AbstractPath<T>>
             .build()
     )
 
+    /**
+     * Files/Leafs will not have a "/" rendered at the end.
+     */
+    fun childLeaf(pathComponent: String) = companion.construct(
+        builder()
+            .takeFrom(pathComponent.encodeURLQueryComponent())
+            .build()
+    )
+
+    val isLeaf get() = url.encodedPath.endsWith('/')
+
     fun sibling(pathComponent: String) = parent().child(pathComponent)
 
     override fun toString(): String =
@@ -114,6 +125,20 @@ open class AbstractPath<T: AbstractPath<T>>
                     }
                 }
             })
+    }
+
+    fun startsWith(child: T): Boolean = url.encodedPath.startsWith(child.url.encodedPath)
+
+    /**
+     * Calculates the "distance" between the child `this` and the `parent`.
+     * (It can be safely used to order content based on the hierarchy, but for nothing else.
+     * Technically it is just the difference of number in characters in the content path.)
+     *
+     * If `this` is not a child of `parent`, will return null. if `parent` == `child`, will be 0,
+     * otherwise > 0
+     */
+    fun subPathDistance(parent: T): Int? = startsWith(parent).then {
+        this.url.encodedPath.length - parent.url.encodedPath.length
     }
 
 }
@@ -219,6 +244,12 @@ data class LoaderContext(
             "Unable to find path for content ${content.toStringReflective(maxDepth = 2)}"
         }.path
     }
+
+    /**
+     * @see [AbstractPath.subPathDistance]
+     */
+    fun subPageDistance(parent: ContentDef, child: ContentDef): Int? =
+        findContentPath(child).subPathDistance(findContentPath(parent))
 }
 
 /**

@@ -2,7 +2,7 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.assets.*
-import com.dc2f.util.CacheUtil
+import com.dc2f.util.*
 import com.google.common.io.*
 import java.io.*
 import java.net.URI
@@ -184,14 +184,12 @@ data class RenderContext<T : ContentDef>(
     }
 
     fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
-        if (absoluteUrl) {
-            absoluteUrl(page)
-        } else {
-            when (val path = renderer.findRenderPath(page)) {
-                RenderPath.root -> "/"
-                else -> "/$path/"
-            }
-        }
+        (page as? WithRedirect)?.redirect?.href(this)
+            ?: absoluteUrl.then { absoluteUrl(page) }
+            ?: when (val path = renderer.findRenderPath(page)) {
+                    RenderPath.root -> "/"
+                    else -> "/$path/"
+                }
 
     /** absolute url https://example.org/path/ */
     fun absoluteUrl(page: ContentDef) =

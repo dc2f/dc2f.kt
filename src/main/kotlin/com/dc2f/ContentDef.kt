@@ -56,6 +56,10 @@ interface SlugCustomization {
     fun createSlug() = slug?.slug ?: slugGenerationValue()?.let { Slugify().slugify(it) }
 }
 
+interface WithRedirect {
+    val redirect: ContentReference?
+}
+
 interface Parsable<T: ContentDef> {
     abstract fun parseContent(
         context: LoaderContext,
@@ -103,7 +107,7 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
 
     protected fun getTargetOutputPath(context: RenderContext<*>, fileName: String = name): Pair<RenderPath, Path> {
         val containerPath = context.renderer.findRenderPath(container)
-        val renderPath = containerPath.child(fileName)
+        val renderPath = containerPath.childLeaf(fileName)
 
         return renderPath to context.rootPath.resolve(renderPath.toString())
     }
