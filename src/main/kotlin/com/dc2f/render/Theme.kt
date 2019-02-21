@@ -1,12 +1,15 @@
 package com.dc2f.render
 
 import com.dc2f.*
-import com.dc2f.assets.Transformer
+import com.dc2f.assets.*
+import com.dc2f.util.CacheUtil
 import com.google.common.io.*
-import java.io.File
+import java.io.*
 import java.net.URI
 import java.nio.file.*
 import java.nio.file.Files
+import java.time.LocalDate
+import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSuperclassOf
 
@@ -33,18 +36,57 @@ abstract class Theme() {
     open fun renderLinkTitle(content: ContentDef): String? = null
 }
 
+data class AssetPipelineCacheKey(val cacheInfo: String, val transformer: List<TransformerCacheKey>) : Serializable
+data class AssetPipelineCacheValue(
+    val fileName: String,
+    val cachedFileName: String,
+    val transformerValue: List<TransformerValue?>
+) : Serializable
+
 @Suppress("UnstableApiUsage")
 class AssetPipeline(
+    private val cacheInfo: String,
     private val context: RenderContext<*>,
     private val renderCharAsset: RenderCharAsset
 ) {
+    companion object {
+        val cachePath: Path by lazy {
+            CacheUtil.cacheDirectory.toPath().resolve("dc2f-assetpipeline")
+                .also { Files.createDirectories(it) }
+        }
 
-    private val pipeline = mutableListOf<Transformer>()
+        val cacheNamePrefix by lazy {
+            LocalDate.now().let { "${it.year}-${it.monthValue}" }
+                .also { Files.createDirectories(cachePath.resolve(it)) }
+        }
+    }
+
+    private val pipeline = mutableListOf<Transformer<TransformerValue>>()
 
     fun href(outputDirectory: RenderPath): String = "/${runTransformations(outputDirectory)}"
 
     private fun runTransformations(outputDirectory: RenderPath): RenderPath {
-        // we currently only support one pipeline step.. don't ask.
+        // check if we have cached something..
+        val cacheKey = AssetPipelineCacheKey(cacheInfo, pipeline.map { it.cacheKey })
+        val value = ImageCache.assetPipelineCache.get(cacheKey)?.also {
+            it.transformerValue.forEachIndexed { index, transformerValue ->
+                transformerValue?.let {
+                    pipeline[index].updateValueFromCache(transformerValue)
+                    // make sure value was actually set correctly.
+                    assert(pipeline[index].value != null)
+                }
+            }
+        } ?: {
+            val result = pipeline.fold(renderCharAsset) { last, transformer ->
+                transformer.transform(last)
+            }
+
+            val cachedFileName = "$cacheNamePrefix/${result.fileName}.${UUID.randomUUID()}.${result.fileName}"
+            result.contentReader.copyTo(MoreFiles.asCharSink(cachePath.resolve(cachedFileName), Charsets.UTF_8))
+
+            AssetPipelineCacheValue(result.fileName, cachedFileName, pipeline.map { it.value })
+                .also { ImageCache.assetPipelineCache.put(cacheKey, it) }
+        }()
 
 //        if (pipeline.isEmpty()) {
 //            if (!Files.exists(absPath)) {
@@ -53,16 +95,15 @@ class AssetPipeline(
 //            return "/$outputPath"
 //        }
 
-        val result = pipeline.fold(renderCharAsset) { last, transformer ->
-            transformer.transform(last)
-        }
-
-        val renderPath = outputDirectory.child(result.fileName)
-
+        val renderPath = outputDirectory.child(value.fileName)
         val absFsPath = context.rootPath.resolve(renderPath.toString())
-        Files.createDirectories(absFsPath.parent)
+        val cachedFsPath = cachePath.resolve(value.cachedFileName)
 
-        result.contentReader.copyTo(MoreFiles.asCharSink(absFsPath, Charsets.UTF_8))
+        if (!Files.exists(absFsPath)) {
+            Files.createDirectories(absFsPath.parent)
+            Files.createLink(absFsPath, cachedFsPath)
+        }
+//        result.contentReader.copyTo(MoreFiles.asCharSink(absFsPath, Charsets.UTF_8))
 //        if (!Files.exists(absPath)) {
 //            val outputUri = absPath.toUri()
 //            pipeline[0].transform(renderCharAsset)
@@ -72,7 +113,7 @@ class AssetPipeline(
         return renderPath
     }
 
-    fun transform(transformer: Transformer): AssetPipeline {
+    fun transform(transformer: Transformer<TransformerValue>): AssetPipeline {
         pipeline.add(transformer)
         return this
     }
@@ -113,8 +154,10 @@ data class RenderContext<T : ContentDef>(
         val resource =
             theme.javaClass.classLoader.getResource(path)?.toURI()
                 ?: getResourceFromFileSystem(path)
+        val size = try { File(resource).length() } catch (e: IllegalArgumentException) { -1L }
         @Suppress("UnstableApiUsage")
         return AssetPipeline(
+            "$path:$size",
             this,
             RenderCharAsset(
                 Resources.asCharSource(resource.toURL(), Charsets.UTF_8),
@@ -140,11 +183,19 @@ data class RenderContext<T : ContentDef>(
         }
     }
 
-    fun href(page: ContentDef): String =
-        when (val path = renderer.findRenderPath(page)) {
-            RenderPath.root -> "/"
-            else -> "/$path/"
+    fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
+        if (absoluteUrl) {
+            absoluteUrl(page)
+        } else {
+            when (val path = renderer.findRenderPath(page)) {
+                RenderPath.root -> "/"
+                else -> "/$path/"
+            }
         }
+
+    /** absolute url https://example.org/path/ */
+    fun absoluteUrl(page: ContentDef) =
+        renderer.absoluteUrl(renderer.findRenderPath(page))
 
     fun<U: ContentDef> renderNode(content: U): String {
 //        val metadata = requireNotNull(metadata.childrenMetadata[content])

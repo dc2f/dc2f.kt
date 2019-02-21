@@ -108,11 +108,14 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
         return renderPath to context.rootPath.resolve(renderPath.toString())
     }
 
-    fun href(context: RenderContext<*>): String {
+    fun href(context: RenderContext<*>, absoluteUri: Boolean = false): String {
         val (renderPath, targetPath) = getTargetOutputPath(context)
         Files.createDirectories(targetPath.parent)
         if (!Files.exists(targetPath)) {
             Files.copy(fsPath, targetPath)
+        }
+        if (absoluteUri) {
+            return renderPath.absoluteUrl(context.renderer.urlConfig)
         }
         return "/$renderPath"
     }
@@ -242,10 +245,6 @@ data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val 
 
 object ImageCache {
 
-    init {
-        CacheManagerBuilder.newCacheManagerBuilder()
-    }
-
     val imageInfoCache: Cache<ImageInfoCacheKey, ImageInfo> by lazy {
         CacheUtil.cacheManager
             .createCache(
@@ -254,7 +253,7 @@ object ImageCache {
                     ImageInfoCacheKey::class.java,
                     ImageInfo::class.java,
                     ResourcePoolsBuilder.newResourcePoolsBuilder()
-//                        .heap(50, EntryUnit.ENTRIES)
+                        .heap(50, EntryUnit.ENTRIES)
                         .disk(50, MemoryUnit.MB, true)
                 ))
 
@@ -268,11 +267,23 @@ object ImageCache {
                     ImageResizeCacheKey::class.java,
                     ImageResizeCacheData::class.java,
                     ResourcePoolsBuilder.newResourcePoolsBuilder()
-//                        .heap(50, EntryUnit.ENTRIES)
+                        .heap(50, EntryUnit.ENTRIES)
                         .disk(50, MemoryUnit.MB, true)
                 ))
     }
 
+    val assetPipelineCache: Cache<AssetPipelineCacheKey, AssetPipelineCacheValue> by lazy {
+        CacheUtil.cacheManager
+            .createCache(
+                "assetPipeline",
+                CacheConfigurationBuilder.newCacheConfigurationBuilder(
+                    AssetPipelineCacheKey::class.java,
+                    AssetPipelineCacheValue::class.java,
+                    ResourcePoolsBuilder.newResourcePoolsBuilder()
+                        .heap(50, EntryUnit.ENTRIES)
+                        .disk(50, MemoryUnit.MB, true)
+                ))
+    }
 
 }
 

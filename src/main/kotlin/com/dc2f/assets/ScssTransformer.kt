@@ -5,13 +5,8 @@ import com.google.common.hash.Hashing
 import com.google.common.io.CharSource
 import io.bit3.jsass.*
 import mu.KotlinLogging
-import org.apache.commons.io.FileUtils
 import java.io.*
-import java.net.URI
-import java.nio.file.*
-import java.security.MessageDigest
 import java.util.*
-import kotlin.random.Random
 
 private val logger = KotlinLogging.logger {}
 
@@ -20,17 +15,23 @@ fun CharSequence.splitAtLastOccurrence(char: Char): Pair<String, String> {
     return substring(0, pos) to substring(pos+1)
 }
 
-@Suppress("UnstableApiUsage")
-class DigestTransformer : Transformer {
+data class DigestValue(val integrityAttrValue: String) : TransformerValue
 
-    var integrityAttrValue: String? = null
+@Suppress("UnstableApiUsage")
+class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTransformerCacheKey("")) : Transformer<DigestValue> {
+
+    override var value: DigestValue? = null
+
+    override fun updateValueFromCache(transformerValue: TransformerValue) {
+        value = transformerValue as? DigestValue
+    }
 
     override fun transform(input: RenderCharAsset): RenderCharAsset {
         val inputString = input.contentReader.read()
         val hashCode = Hashing.sha256().hashString(inputString, Charsets.UTF_8)
         val algorithm = Hashing::sha256.name
 
-        integrityAttrValue = "$algorithm-${Base64.getEncoder().encodeToString(hashCode.asBytes())}"
+        value = DigestValue(integrityAttrValue = "$algorithm-${Base64.getEncoder().encodeToString(hashCode.asBytes())}")
         val (baseName, extension) = input.fileName.splitAtLastOccurrence('.')
 
         return RenderCharAsset(
@@ -41,7 +42,9 @@ class DigestTransformer : Transformer {
 
 }
 
-class ScssTransformer(val includePaths: List<File> = emptyList()) : Transformer {
+class ScssTransformer(val includePaths: List<File> = emptyList(),
+                      override val cacheKey: TransformerCacheKey = StringTransformerCacheKey(includePaths.hashCode().toString())
+) : Transformer<TransformerValue> {
 
 
     override fun transform(input: RenderCharAsset): RenderCharAsset {

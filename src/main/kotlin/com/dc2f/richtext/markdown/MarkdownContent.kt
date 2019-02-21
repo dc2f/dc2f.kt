@@ -173,6 +173,8 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
         }
     }
 
+    val rawContent get() = content
+
     private fun parsedContent(context: LoaderContext, content: String = this.content): Document {
         require(context.phase.isAfter(LoaderContext.LoaderPhase.Loading))
         return parser.parse(content)

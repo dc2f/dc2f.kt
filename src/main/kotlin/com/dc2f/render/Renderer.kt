@@ -2,7 +2,7 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.util.*
-import io.ktor.http.Url
+import io.ktor.http.*
 import mu.KotlinLogging
 import java.io.StringWriter
 import java.nio.file.*
@@ -16,13 +16,26 @@ class RenderPath private constructor(url: Url) : AbstractPath<RenderPath>(Render
         override val construct get() = ::RenderPath
     }
 
+    fun absoluteUrl(config: UrlConfig) =
+        url.copy(protocol = config.urlProtocol, host = config.host).toString()
+}
+
+class UrlConfig(
+    val protocol: String = "https",
+    val host: String = "example.org"
+) {
+
+    internal val urlProtocol: URLProtocol by lazy {
+        URLProtocol.createOrDefault(protocol)
+    }
 }
 
 
 class Renderer(
     private val theme: Theme,
     private val target: Path,
-    val loaderContext: LoaderContext
+    val loaderContext: LoaderContext,
+    val urlConfig: UrlConfig
 ) {
 
     val clearTiming = Timing("clear")
@@ -94,4 +107,7 @@ class Renderer(
         ).renderToHtml()
         return writer.toString()
     }
+
+    fun absoluteUrl(path: RenderPath) =
+        path.absoluteUrl(urlConfig)
 }
