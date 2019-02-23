@@ -2,7 +2,6 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.assets.*
-import com.dc2f.util.*
 import com.google.common.io.*
 import java.io.*
 import java.net.URI
@@ -49,17 +48,19 @@ class AssetPipeline(
     private val context: RenderContext<*>,
     private val renderCharAsset: RenderCharAsset
 ) {
-    companion object {
-        val cachePath: Path by lazy {
-            CacheUtil.cacheDirectory.toPath().resolve("dc2f-assetpipeline")
-                .also { Files.createDirectories(it) }
-        }
 
-        val cacheNamePrefix by lazy {
-            LocalDate.now().let { "${it.year}-${it.monthValue}" }
-                .also { Files.createDirectories(cachePath.resolve(it)) }
-        }
+    // TODO maybe we should not always call createDirectories here?
+    val cachePath: Path by lazy {
+        loaderContext.cache.cacheDirectory.toPath().resolve("dc2f-assetpipeline")
+            .also { Files.createDirectories(it) }
     }
+
+    val cacheNamePrefix by lazy {
+        LocalDate.now().let { "${it.year}-${it.monthValue}" }
+            .also { Files.createDirectories(cachePath.resolve(it)) }
+    }
+
+    private val loaderContext get() = context.renderer.loaderContext
 
     private val pipeline = mutableListOf<Transformer<TransformerValue>>()
 
@@ -68,7 +69,8 @@ class AssetPipeline(
     private fun runTransformations(outputDirectory: RenderPath): RenderPath {
         // check if we have cached something..
         val cacheKey = AssetPipelineCacheKey(cacheInfo, pipeline.map { it.cacheKey })
-        val value = ImageCache.assetPipelineCache.get(cacheKey)?.also {
+        val imageCache = loaderContext.imageCache
+        val value = imageCache.assetPipelineCache.get(cacheKey)?.also {
             it.transformerValue.forEachIndexed { index, transformerValue ->
                 transformerValue?.let {
                     pipeline[index].updateValueFromCache(transformerValue)
@@ -85,7 +87,7 @@ class AssetPipeline(
             result.contentReader.copyTo(MoreFiles.asCharSink(cachePath.resolve(cachedFileName), Charsets.UTF_8))
 
             AssetPipelineCacheValue(result.fileName, cachedFileName, pipeline.map { it.value })
-                .also { ImageCache.assetPipelineCache.put(cacheKey, it) }
+                .also { imageCache.assetPipelineCache.put(cacheKey, it) }
         }()
 
 //        if (pipeline.isEmpty()) {
@@ -184,16 +186,7 @@ data class RenderContext<T : ContentDef>(
     }
 
     fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
-        (page as? WithRedirect)?.redirect?.href(this)
-            ?: absoluteUrl.then { absoluteUrl(page) }
-            ?: when (val path = renderer.findRenderPath(page)) {
-                    RenderPath.root -> "/"
-                    else -> "/$path/"
-                }
-
-    /** absolute url https://example.org/path/ */
-    fun absoluteUrl(page: ContentDef) =
-        renderer.absoluteUrl(renderer.findRenderPath(page))
+        renderer.href(page, absoluteUrl)
 
     fun<U: ContentDef> renderNode(content: U): String {
 //        val metadata = requireNotNull(metadata.childrenMetadata[content])

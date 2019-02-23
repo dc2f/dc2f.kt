@@ -5,8 +5,9 @@ import org.ehcache.*
 import org.ehcache.config.builders.CacheManagerBuilder
 import org.ehcache.core.spi.service.StatisticsService
 import org.ehcache.spi.service.*
-import java.io.File
-import kotlin.reflect.KClass
+import java.io.*
+import kotlin.reflect.*
+import kotlin.reflect.jvm.isAccessible
 
 private val logger = KotlinLogging.logger {}
 
@@ -24,7 +25,7 @@ class AppService: Service {
 
 }
 
-object CacheUtil {
+class CacheUtil : Closeable {
 
     private val dummy = AppService()
 
@@ -65,7 +66,29 @@ object CacheUtil {
                     cacheManager.getCache(entry.key, entry.value.keyType, entry.value.valueType)?.clear()
                 }
     }
+
+    override fun close() {
+        if (this::cacheManager.isLazyInitialized) {
+            cacheManager.close()
+        }
+    }
 }
+
+/**
+ * Returns true if a lazy property reference has been initialized, or if the property is not lazy.
+ */
+val KProperty0<*>.isLazyInitialized: Boolean
+    get() {
+        if (this !is Lazy<*>) return true
+
+        // Prevent IllegalAccessException from JVM access check on private properties.
+        val originalAccessLevel = isAccessible
+        isAccessible = true
+        val isLazyInitialized = (getDelegate() as Lazy<*>).isInitialized()
+        // Reset access level.
+        isAccessible = originalAccessLevel
+        return isLazyInitialized
+    }
 
 private fun <T : CacheManager?, U : Service> CacheManagerBuilder<T>.using(kClass: KClass<U>) =
         using {

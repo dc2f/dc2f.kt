@@ -1,15 +1,15 @@
 package com.dc2f
 
 import com.dc2f.loader.TolerantZonedDateTime
-import com.dc2f.richtext.markdown.ValidationRequired
+import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.fasterxml.jackson.module.mrbean.MrBeanModule
 import io.ktor.http.*
+import kotlinx.io.core.Closeable
 import mu.KotlinLogging
 import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
@@ -97,6 +97,9 @@ open class AbstractPath<T: AbstractPath<T>>
 
     val isLeaf get() = url.encodedPath.endsWith('/')
 
+    fun <OTHER: AbstractPath<OTHER>, T: AbstractPathCompanion<OTHER>> transform(otherCompanion: T) =
+        otherCompanion.construct(url)
+
     fun sibling(pathComponent: String) = parent().child(pathComponent)
 
     override fun toString(): String =
@@ -178,7 +181,7 @@ class ContentDefMetadata(
 
 data class LoaderContext(
     val root: Path
-) {
+) : Closeable {
 
     enum class LoaderPhase {
         Loading,
@@ -189,6 +192,9 @@ data class LoaderContext(
         fun isAfter(before: LoaderPhase) =
             (ordinal > before.ordinal)
     }
+
+    val cache = CacheUtil()
+    val imageCache = ImageCache(cache)
 
     var phase: LoaderPhase = LoaderPhase.Loading
         private set
@@ -253,6 +259,11 @@ data class LoaderContext(
      */
     fun subPageDistance(parent: ContentDef, child: ContentDef): Int? =
         findContentPath(child).subPathDistance(findContentPath(parent))
+
+
+    override fun close() {
+        cache.close()
+    }
 }
 
 /**
@@ -313,14 +324,17 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }.toMap()
     }
 
-    fun load(dir: Path): LoadedContent<T> {
-        val context = LoaderContext(dir)
-        return context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
-            .also { c ->
-                context.lastVerifyDuration.measure {
-                    c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
-                }
-            }
+    fun <RET> load(dir: Path, process: (content: LoadedContent<T>, context: LoaderContext) -> RET): RET =
+        LoaderContext(dir).use { context ->
+            process(
+                context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
+                    .also { c ->
+                        context.lastVerifyDuration.measure {
+                            c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
+                        }
+                    },
+                context
+            )
     }
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
@@ -378,6 +392,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     )} --- $children"
                 }
                 return children[valueId]?.let { child ->
+                    @Suppress("IMPLICIT_CAST_TO_ANY")
                     if (valueId == PROPERTY_CHILDREN) {
                         logger.debug("injecting children: $child.")
                         child.map { it.second.content }
@@ -489,13 +504,21 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 it.isAccessible = true
 //                return@forEach
             }
-            val x = it.get(content)
-            if (x == null) {
-                if (!it.returnType.isMarkedNullable) {
-                    throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
+            if (it.getDelegate(content) != null) {
+                logger.trace { "Ignoring delegated property $it" }
+                return@forEach
+            }
+            try {
+                val x = it.get(content)
+                if (x == null) {
+                    if (!it.returnType.isMarkedNullable) {
+                        throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
+                    }
+                } else {
+                    validateBeanIfRequired(context, parent, x)
                 }
-            } else {
-                validateBeanIfRequired(context, parent, x)
+            } catch (e: Throwable) {
+                throw ValidationException("Error while validating property $it: ${e.message}", e)
             }
         }
     }

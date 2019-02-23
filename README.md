@@ -27,6 +27,8 @@ Not sure yet, you tell me. Just call it dc2f for now.
 
 * Multilingual support
 * (Better, or any at all) IDE Support (autocompletion in YAML files, etc.)
+* Paging
+* Different renderings for different output formats(?)
 
 ## Content Types
 

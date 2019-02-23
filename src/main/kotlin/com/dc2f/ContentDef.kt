@@ -56,8 +56,21 @@ interface SlugCustomization {
     fun createSlug() = slug?.slug ?: slugGenerationValue()?.let { Slugify().slugify(it) }
 }
 
-interface WithRedirect {
+interface WithRenderPathOverride {
+    @JvmDefault
+    fun renderPath(renderer: Renderer): RenderPath? = null
+}
+
+interface WithUriReferencePathOverride {
+    @JvmDefault
+    fun uriReferencePath(renderer: Renderer): UriReferencePath? = null
+}
+
+interface WithRedirect : WithUriReferencePathOverride {
     val redirect: ContentReference?
+
+    @JvmDefault
+    override fun uriReferencePath(renderer: Renderer) = redirect?.let { renderer.findUriReferencePath(it) }
 }
 
 interface Parsable<T: ContentDef> {
@@ -69,7 +82,7 @@ interface Parsable<T: ContentDef> {
 }
 
 // TODO: Maybe find a way to enforce the type of content which can be referenced?
-class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired {
+class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired, WithRenderPathOverride {
 
 //    @JsonCreator
 //    constructor(path: String) : this(ContentPath.parse(path))
@@ -94,6 +107,9 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
             href(renderContext)
 
     }
+
+    override fun renderPath(renderer: Renderer): RenderPath =
+        renderer.findRenderPath(referencedContent)
 }
 
 
@@ -102,8 +118,10 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     val name: String get() = fsPath.fileName.toString()
 
     private lateinit var container: ContentDef
+    internal lateinit var loaderContext: LoaderContext
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        this.loaderContext = loaderContext
         container = loaderContext.contentByPath[file.parent()] ?: return "Unable to find parent of file asset $file"
         return null
     }
@@ -121,10 +139,11 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
         if (!Files.exists(targetPath)) {
             Files.copy(fsPath, targetPath)
         }
+        val uriReferencePath = UriReferencePath.fromRenderPath(renderPath)
         if (absoluteUri) {
-            return renderPath.absoluteUrl(context.renderer.urlConfig)
+            return uriReferencePath.absoluteUrl(context.renderer.urlConfig)
         }
-        return "/$renderPath"
+        return "/$uriReferencePath"
     }
     fun hrefRenderable(): Renderable = object : Renderable {
         override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
@@ -176,18 +195,18 @@ class ResizedImage(
 
 open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath) {
     val imageInfo: ImageInfo by lazy { parseImage() }
-    val width get() = imageInfo.width
-    val height get() = imageInfo.height
+    val width by lazy { imageInfo.width }
+    val height by lazy { imageInfo.height }
     private val fileSize by lazy { Files.size(fsPath) }
 
-    companion object {
-        val cachePath: Path by lazy {
-            CacheUtil.cacheDirectory.toPath().resolve("dc2f-image-resize")
-                .also { Files.createDirectories(it) }
-        }
-    }
+    private fun imageCache() = loaderContext.imageCache
+
+    private fun cachePath(loaderContext: LoaderContext): Path =
+        loaderContext.cache.cacheDirectory.toPath().resolve("dc2f-image-resize")
+            .also { Files.createDirectories(it) }
 
     fun resize(context: RenderContext<*>, width: Int, height: Int, fillType: FillType): ResizedImage {
+        val cachePath = cachePath(context.renderer.loaderContext)
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
         val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
@@ -195,7 +214,7 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         // FIXME: 1.) implement some way to clean up old resized images.
         //        2.) if because of some reason there is a cache entry, but no resized file, we have to resize it again.
         val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name)
-        val cachedData = ImageCache.imageResizeCache.get(cacheKey)
+        val cachedData = imageCache().imageResizeCache.get(cacheKey)
             ?: {
                 logger.info { "Image not found in cache. need to recompute $cacheKey" }
                 val original = ImageIO.read(fsPath.toFile())
@@ -212,7 +231,7 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
                 FileImageSink(cachePath.resolve(cachedFileName).toFile()).write(thumbnailImage)
 
                 ImageResizeCacheData(cachedFileName, thumbnailImage.width, thumbnailImage.height)
-                    .also { ImageCache.imageResizeCache.put(cacheKey, it) }
+                    .also { imageCache().imageResizeCache.put(cacheKey, it) }
             }()
 
         if (!Files.exists(targetPath)) {
@@ -235,7 +254,7 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
     }
 
     private fun parseImage() =
-        ImageCache.imageInfoCache.cached(
+        imageCache().imageInfoCache.cached(
             ImageInfoCacheKey(
                 fsPath.toString(),
                 fileSize)
@@ -250,10 +269,10 @@ data class ImageInfoCacheKey(val imageFsPath: String, val imageFileSize: Long) :
 data class ImageResizeCacheKey(val imageContentPath: String, val imageFileSize: Long, val width: Int, val height: Int, val fillTypeName: String) : Serializable
 data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val height: Int) : Serializable
 
-object ImageCache {
+class ImageCache(val cache: CacheUtil) {
 
     val imageInfoCache: Cache<ImageInfoCacheKey, ImageInfo> by lazy {
-        CacheUtil.cacheManager
+        cache.cacheManager
             .createCache(
                 "imageInfoCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(
@@ -267,7 +286,7 @@ object ImageCache {
     }
 
     val imageResizeCache: Cache<ImageResizeCacheKey, ImageResizeCacheData> by lazy {
-        CacheUtil.cacheManager
+        cache.cacheManager
             .createCache(
                 "imageResizeCache",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(
@@ -280,7 +299,7 @@ object ImageCache {
     }
 
     val assetPipelineCache: Cache<AssetPipelineCacheKey, AssetPipelineCacheValue> by lazy {
-        CacheUtil.cacheManager
+        cache.cacheManager
             .createCache(
                 "assetPipeline",
                 CacheConfigurationBuilder.newCacheConfigurationBuilder(

@@ -65,6 +65,9 @@ dependencies {
     implementation("io.ktor:ktor-http-jvm:1.1.2") // mainly for UrlBuilder
     implementation("io.ktor:ktor-http:1.1.2") // mainly for UrlBuilder
 
+    // google sitemap generator
+    compile("com.github.dfabulich:sitemapgen4j:1.1.2")
+
     // image io for reading images - jpeg support, bmp: ico support
     compile("com.twelvemonkeys.imageio:imageio-jpeg:3.4.1")
     compile("com.twelvemonkeys.imageio:imageio-bmp:3.4.1")

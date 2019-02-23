@@ -30,7 +30,8 @@ abstract class ExampleWebsite: Website<SimpleContentFolderChild>
 fun main() {
     logger.info { "Starting ..." }
 
-    val website = ContentLoader(ExampleWebsite::class).load(FileSystems.getDefault().getPath("example", "example_website"))
-    logger.info { "loaded website ${website}."}
-    logger.info { "reflected: ${ReflectionToStringBuilder.toString(website, MultilineRecursiveToStringStyle())}" }
+    ContentLoader(ExampleWebsite::class).load(FileSystems.getDefault().getPath("example", "example_website")) { website, context ->
+        logger.info { "loaded website ${website}."}
+        logger.info { "reflected: ${ReflectionToStringBuilder.toString(website, MultilineRecursiveToStringStyle())}" }
+    }
 }
