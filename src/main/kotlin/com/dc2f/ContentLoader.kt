@@ -384,6 +384,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     } else {
                         child[0].second.content
                     }
+                    // FIXME maybe just use a default value instead of this hard coded stuff?
+                    //       should actually work by simply specifying `= emptyList()` for
+                    //       abstract classes. but probably not for interfaces?
                 } ?: (valueId == PROPERTY_CHILDREN).then { emptyList<ContentDef>() }
 
             }
