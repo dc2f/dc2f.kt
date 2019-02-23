@@ -59,13 +59,25 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
             return link
         }
         try {
-            if (!link.url.contains("://") && !link.url.contains("@")) {
+            if (link.url.startsWith('@') || (!link.url.contains("://") && !link.url.contains("@"))) {
                 // validate internal link.
                 val loaderContext = requireNotNull(context.options[LOADER_CONTEXT])
+                val renderContext = context.options[RENDER_CONTEXT]
+
+                if (link.url.startsWith('@')) {
+                    if (renderContext == null) {
+                        require(loaderContext.phase == LoaderContext.LoaderPhase.Validating)
+                        return link
+                    }
+                    val obj = BeanUtil.pojo.getProperty<Any>(RichTextContext(renderContext.node, loaderContext, renderContext, null), link.url.substring(1))
+                    return link.withUrl(RichText.render(obj, renderContext)).withLinkType(LinkType.LINK).withStatus(
+                        LinkStatus.VALID)
+                }
+
                 val linkedContent = loaderContext.contentByPath[ContentPath.parse(link.url)]
                     ?: throw ValidationException("Invalid link: ${link.toStringReflective()}")
 
-                return context.options[RENDER_CONTEXT]?.let { renderContext ->
+                return renderContext?.let { renderContext ->
                     val l = link.withStatus(LinkStatus.VALID)
                         .withUrl(renderContext.href(linkedContent))
                         .withTitle(renderContext.theme.renderLinkTitle(linkedContent))
@@ -133,6 +145,12 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
         mutableSetOf(
             NodeRenderingHandler<Macro>(Macro::class.java, ::render),
             NodeRenderingHandler<MacroBlock>(MacroBlock::class.java) { param: MacroBlock, nodeRendererContext: NodeRendererContext, htmlWriter: HtmlWriter ->
+                if (!param.isClosedTag) {
+                    throw IllegalArgumentException("Tag must be cloesd. Got: ${param.chars}")
+                }
+                if (!param.macroContentChars.isNullOrBlank()) {
+                    throw IllegalArgumentException("Tag content must be empty, because it is ignored. contains: ${param.chars}")
+                }
                 render(param.macroNode, nodeRendererContext, htmlWriter)
             }
         )
@@ -227,6 +245,9 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
                 .render(parsedContent(loaderContext))
             null
         } catch (e: ValidationException) {
+            e.message
+        } catch (e: IllegalArgumentException) {
+            logger.error(e) { "Error while parsing content." }
             e.message
         }
     }

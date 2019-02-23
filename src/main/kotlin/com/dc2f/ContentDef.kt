@@ -74,14 +74,17 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 //    @JsonCreator
 //    constructor(path: String) : this(ContentPath.parse(path))
 
+//    lateinit var referencedContentPath: ContentPath
     lateinit var referencedContent: ContentDef
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
-        val contentPath = parent.metadata.path.resolve(contentPathValue)
-        referencedContent = loaderContext.contentByPath[contentPath]
-            ?: return "Invalid content path: $contentPath"
+        val referencedContentPath = parent.metadata.path.resolve(contentPathValue)
+        referencedContent = loaderContext.contentByPath[referencedContentPath]
+            ?: return "Invalid content path: $referencedContentPath"
         return null
     }
+
+    fun referencedContentPath(loaderContext: LoaderContext) = loaderContext.findContentPath(referencedContent)
 
     fun href(renderContext: RenderContext<*>): String =
         renderContext.href(referencedContent)
@@ -312,7 +315,7 @@ object ImageCache {
 //}
 
 interface ContentBranchDef<CHILD_TYPE: ContentDef> : ContentDef {
-    @get:JacksonInject("children") @set:JacksonInject("children")
+    @get:JacksonInject(PROPERTY_CHILDREN) @set:JacksonInject(PROPERTY_CHILDREN)
     var children: List<CHILD_TYPE>
 
 }

@@ -1,5 +1,6 @@
 package com.dc2f
 
+import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
 import com.fasterxml.jackson.databind.*
@@ -13,12 +14,14 @@ import mu.KotlinLogging
 import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
 import java.nio.file.*
+import java.time.ZonedDateTime
 import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.isAccessible
 import kotlin.streams.toList
 
+const val PROPERTY_CHILDREN = "children"
 
 private val logger = KotlinLogging.logger {}
 
@@ -270,10 +273,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
         val objectMapper = ObjectMapper(YAMLFactory())
             .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
-            .registerKotlinModule()
-            .registerModule(JavaTimeModule())
-            .registerModule(MrBeanModule())
             .registerModule(SimpleModule().also { module ->
+                module.addDeserializer(ZonedDateTime::class.java, TolerantZonedDateTime())
                 module.addDeserializer(
                     ImageAsset::class.java,
                     FileAssetDeserializer(ImageAsset::class.java, ::ImageAsset)
@@ -283,6 +284,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     FileAssetDeserializer(FileAsset::class.java, ::FileAsset)
                 )
             })
+            .registerKotlinModule()
+//            .registerModule(JavaTimeModule())
+            .registerModule(MrBeanModule())
     }
 
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
@@ -344,7 +348,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
                             ._load(context, child, contentPath.child(slug))
-                    }?.let { "children" to it }
+                    }?.let { PROPERTY_CHILDREN to it }
                     slug != null -> childTypesForProperty(slug)?.get(typeIdentifier)?.let { type ->
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
@@ -374,13 +378,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     )} --- $children"
                 }
                 return children[valueId]?.let { child ->
-                    if (valueId == "children") {
+                    if (valueId == PROPERTY_CHILDREN) {
                         logger.debug("injecting children: $child.")
                         child.map { it.second.content }
                     } else {
                         child[0].second.content
                     }
-                }
+                } ?: (valueId == PROPERTY_CHILDREN).then { emptyList<ContentDef>() }
 
             }
 

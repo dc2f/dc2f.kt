@@ -2,6 +2,7 @@ package com.dc2f.richtext
 
 import com.dc2f.*
 import com.dc2f.render.RenderContext
+import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.readString
 import com.mitchellbosecke.pebble.PebbleEngine
 import com.mitchellbosecke.pebble.extension.*
@@ -46,10 +47,16 @@ class PebbleRenderExtension : AbstractExtension() {
 
 @PropertyType("peb")
 class Pebble(
-    val content: String,
-    val path: Path,
-    private val contentPath: ContentPath
-) : RichText {
+    private val content: String
+) : RichText, ValidationRequired {
+
+//    val path: Path,
+//    private val contentPath: ContentPath
+
+
+    override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
+        return null
+    }
 
     companion object : Parsable<Pebble> {
 
@@ -66,14 +73,15 @@ class Pebble(
             file: Path,
             contentPath: ContentPath
         ): Pebble =
-            Pebble(file.readString(), file, contentPath)
+//            Pebble(file.readString(), file, contentPath)
+            Pebble(file.readString())
     }
 
     override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String {
         val template = engine.getLiteralTemplate(content)
         val output = StringWriter()
-        val node = requireNotNull(renderContext.renderer.loaderContext.contentByPath[contentPath.parent()])
-        template.evaluate(output, RichTextContext(node, renderContext.renderer.loaderContext, renderContext, arguments).asMap())
+//        val node = requireNotNull(renderContext.renderer.loaderContext.contentByPath[contentPath.parent()])
+        template.evaluate(output, RichTextContext(renderContext.node, renderContext.renderer.loaderContext, renderContext, arguments).asMap())
         return output.toString()
     }
 
