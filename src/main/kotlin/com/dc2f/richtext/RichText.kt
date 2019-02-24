@@ -9,10 +9,10 @@ interface RichText: ContentDef, Renderable {
         /**
          * Help method for rich text elements which might need to render resolved objects.
          */
-        fun render(content: Any?, renderContext: RenderContext<*>): String =
+        fun render(content: Any?, renderContext: RenderContext<*>, arguments: Any? = null): String =
             when (content) {
-                is Renderable -> content.renderContent(renderContext)
-                is ContentReference -> render(content.referencedContent, renderContext)
+                is Renderable -> content.renderContent(renderContext, arguments)
+                is ContentReference -> render(content.referencedContent, renderContext, arguments)
                 is ContentDef -> renderContext.renderNode(content)
                 is String -> content
                 else -> throw IllegalArgumentException("Unable to render ${content?.toStringReflective()} (unknown type)")

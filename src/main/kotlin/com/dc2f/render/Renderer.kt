@@ -115,17 +115,27 @@ class Renderer(
 
     fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null) {
         val renderPath = findRenderPath(node)
-        val dir = target.resolve(renderPath.toString())
+        val renderPathFile = if (renderPath.isLeaf) {
+            renderPath
+        } else {
+            renderPath.childLeaf("index.html")
+        }
+
+        val dir = target.resolve(renderPathFile.parent().toString())
         Files.createDirectories(dir)
-        Files.newBufferedWriter(dir.resolve("index.html")).use { writer ->
-            RenderContext(
-                rootPath = previousContext?.rootPath ?: dir,
-                node = node,
-                metadata = previousContext?.metadata ?: metadata,
-                theme = theme,
-                out = writer,
-                renderer = this
-            ).renderToHtml()
+        try {
+            LazyFileRenderOutput(dir.resolve(renderPathFile.name)).use { writer ->
+                RenderContext(
+                    rootPath = previousContext?.rootPath ?: dir,
+                    node = node,
+                    metadata = previousContext?.metadata ?: metadata,
+                    theme = theme,
+                    out = writer,
+                    renderer = this
+                ).renderToHtml()
+            }
+        } catch (e: Throwable) {
+            throw Exception("Error while rendering into $renderPath: ${e.message}", e)
         }
     }
 
@@ -136,7 +146,7 @@ class Renderer(
             node = node,
             metadata = previousContext.metadata,
             theme = theme,
-            out = writer,
+            out = AppendableOutput(writer),
             renderer = this,
             enclosingNode = previousContext.node
         ).renderToHtml()

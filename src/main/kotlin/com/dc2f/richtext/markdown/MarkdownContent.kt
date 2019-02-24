@@ -14,6 +14,7 @@ import com.vladsch.flexmark.util.html.Attributes
 import com.vladsch.flexmark.util.options.*
 import jodd.bean.BeanUtil
 import mu.KotlinLogging
+import org.springframework.expression.spel.standard.SpelExpressionParser
 import java.nio.file.*
 
 private val logger = KotlinLogging.logger {}
@@ -116,6 +117,10 @@ TODO the markdown renderer has quite a few problems
  */
 class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
 
+    companion object {
+        val expressionParser by lazy { SpelExpressionParser() }
+    }
+
     fun render(param: Macro, nodeRendererContext: NodeRendererContext, html: HtmlWriter) {
         logger.debug { "Rendering ${param.name} with: ${param.attributeText}" }
 
@@ -136,9 +141,13 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
         val renderContext = nodeRendererContext.options[RENDER_CONTEXT]
         val context = RichTextContext(renderContext.node, renderContext.renderer.loaderContext, renderContext, null)
         val contentPath = param.attributes["content"]
+        val arguments = param.attributes["arguments"]?.let { str ->
+            val expr = expressionParser.parseExpression(str)
+            expr.getValue(context)
+        }
 
         val result: Any = BeanUtil.pojo.getProperty(context, contentPath)
-        html.rawPre(RichText.render(result, renderContext))
+        html.rawPre(RichText.render(result, renderContext, arguments))
     }
 
     override fun getNodeRenderingHandlers(): MutableSet<NodeRenderingHandler<*>> =

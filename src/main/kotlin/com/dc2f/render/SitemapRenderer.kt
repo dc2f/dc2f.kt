@@ -42,7 +42,10 @@ class SitemapRenderer(
                 WebSitemapUrl(
                     WebSitemapUrl.Options(renderer.href(node, true))
                         .lastMod(
-                            Date.from(node.commitInfo?.authorDate?.toInstant()))
+                            // TODO for now simply take the current date as modification date, if there
+                            //      is no git information. We maybe should change this to the file system file,
+                            //      or a fallback property defined by the user.
+                            node.commitInfo?.authorDate?.toInstant()?.let(Date::from) ?: Date())
                 )
             )
         }

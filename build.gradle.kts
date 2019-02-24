@@ -85,6 +85,7 @@ dependencies {
     implementation("org.jodd:jodd-bean:5.0.8") // for resolving paths
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")
     implementation("io.pebbletemplates:pebble:3.0.8")
+    implementation("org.springframework:spring-expression:5.1.5.RELEASE") // right now only used to parse "arguments" from markdown
 
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")

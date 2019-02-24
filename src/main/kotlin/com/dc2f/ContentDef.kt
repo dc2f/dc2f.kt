@@ -113,6 +113,7 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 
     }
 
+    // TODO this should probably override uriReferencePath, not RenderPath?!
     override fun renderPath(renderer: Renderer): RenderPath =
         renderer.findRenderPath(referencedContent)
 }

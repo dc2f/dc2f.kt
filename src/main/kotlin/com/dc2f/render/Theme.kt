@@ -2,8 +2,11 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.assets.*
+import com.dc2f.util.isLazyInitialized
 import com.google.common.io.*
+import kotlinx.html.TagConsumer
 import kotlinx.html.stream.appendHTML
+import mu.KotlinLogging
 import java.io.*
 import java.net.URI
 import java.nio.file.*
@@ -13,8 +16,9 @@ import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.isSuperclassOf
 
+private val logger = KotlinLogging.logger {}
 
-abstract class Theme() {
+abstract class Theme {
 
     val config: ThemeConfig = ThemeConfig()
 
@@ -127,13 +131,44 @@ class RenderCharAsset(
     val fileName: String
 )
 
+class LazyFileRenderOutput(val filePath: Path) : RenderOutput() {
+    private val writer by lazy {
+        logger.debug { "creating file at $filePath." }
+        Files.newBufferedWriter(filePath)
+    }
+
+    override fun appendln(string: String) {
+        writer.appendln(string)
+    }
+
+    override fun appendHTML() = writer.appendHTML()
+
+    override fun close() {
+        if (this::writer.isLazyInitialized) {
+            writer.close()
+        }
+    }
+}
+
+class AppendableOutput(val appendable: Appendable) : RenderOutput() {
+    override fun appendln(string: String) { appendable.appendln(string) }
+    override fun appendHTML(): TagConsumer<Appendable> = appendable.appendHTML()
+    override fun close() {}
+
+}
+
+abstract class RenderOutput : Closeable {
+    abstract fun appendln(string: String)
+    internal abstract fun appendHTML() : TagConsumer<Appendable>
+}
+
 data class RenderContext<T : ContentDef>(
     val rootPath: Path,
     val node: T,
     // the root metadata.
     val metadata: ContentDefMetadata,
     val theme: Theme,
-    val out: Appendable,
+    val out: RenderOutput,
     val renderer: Renderer,
     val enclosingNode: ContentDef? = null
 ) {
@@ -142,7 +177,10 @@ data class RenderContext<T : ContentDef>(
     val rootNode get() = renderer.loaderContext.rootNode
 
     fun appendHTML() =
-        out.appendln("<!DOCTYPE html>").appendHTML()
+        out.run {
+            appendln("<!DOCTYPE html>")
+            appendHTML()
+        }
 
     fun renderToHtml() {
         @Suppress("UNCHECKED_CAST")

@@ -46,7 +46,22 @@ abstract class AbstractPathCompanion<T: AbstractPath<T>> {
         )
 
     fun parse(path: String): T =
+        // TODO should we use [String.decodedPathComponents] instead of [split]?
         fromPathComponents(path.trim('/').split('/'))
+
+    /**
+     *  a variant of [parse] which generates a "leaf" path if the string
+     *  does not end in a `/`.
+     *  (If it does not end in `/`, requires that the last path component
+     *  contains a `.`)
+     */
+    fun parseLeafPath(path: String): T =
+        path.endsWith('/').then { parse(path) }
+            ?: path.decodedPathComponents.run {
+                require(last().contains('.'))
+                fromPathComponents(dropLast(1))
+                    .childLeaf(last())
+            }
 
     internal fun fromPathComponents(pathComponents: Iterable<String>) =
         construct(rootBuilder
@@ -97,7 +112,7 @@ open class AbstractPath<T: AbstractPath<T>>
             .build()
     )
 
-    val isLeaf get() = url.encodedPath.endsWith('/')
+    val isLeaf get() = !isRoot && !url.encodedPath.endsWith('/')
 
     fun <OTHER: AbstractPath<OTHER>, T: AbstractPathCompanion<OTHER>> transform(otherCompanion: T) =
         otherCompanion.construct(url)
