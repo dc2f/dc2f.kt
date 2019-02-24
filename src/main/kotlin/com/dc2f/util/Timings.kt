@@ -7,6 +7,9 @@ class Timing(val label: String) {
     var duration: Milliseconds = 0
 
     companion object {
+        fun allToString(): Any? =
+            allTimings.joinToString(System.lineSeparator() + "    ", prefix = "${System.lineSeparator()}    ") { it.toString() }
+
         val allTimings = mutableSetOf<Timing>()
     }
 

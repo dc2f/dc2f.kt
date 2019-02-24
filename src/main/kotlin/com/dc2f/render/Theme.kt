@@ -3,6 +3,7 @@ package com.dc2f.render
 import com.dc2f.*
 import com.dc2f.assets.*
 import com.google.common.io.*
+import kotlinx.html.stream.appendHTML
 import java.io.*
 import java.net.URI
 import java.nio.file.*
@@ -139,6 +140,9 @@ data class RenderContext<T : ContentDef>(
     val content get() = node
     val context get() = this
     val rootNode get() = renderer.loaderContext.rootNode
+
+    fun appendHTML() =
+        out.appendln("<!DOCTYPE html>").appendHTML()
 
     fun renderToHtml() {
         @Suppress("UNCHECKED_CAST")

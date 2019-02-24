@@ -1,9 +1,11 @@
 package com.dc2f
 
+import com.dc2f.git.*
 import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
 import com.fasterxml.jackson.databind.*
+import com.fasterxml.jackson.databind.introspect.AnnotatedMethod
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -213,6 +215,9 @@ data class LoaderContext(
     val rootNode get() = requireNotNull(contentByPath[ContentPath.root]) {
         "wanted to resolve ${ContentPath.root} - available: ${contentByPath.entries}"
     }
+    val gitInfo by lazy {
+        GitInfoLoaderCmd(root).load()
+    }
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
@@ -366,7 +371,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     slug != null -> childTypesForProperty(slug)?.get(typeIdentifier)?.let { type ->
                         @Suppress("UNCHECKED_CAST")
                         ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(context, child, contentPath.child(slug))
+                            ._load(context, child, contentPath.child("@$slug"))
                     }?.let { slug to it }
                     else -> null
                 }?.also { context.registerLoadedContent(it.second) }
@@ -375,13 +380,17 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
         val injectableValues = object : InjectableValues() {
             override fun findInjectableValue(
-                valueId: Any?,
+                valueId: Any,
                 ctxt: DeserializationContext?,
                 forProperty: BeanProperty?,
                 beanInstance: Any?
             ): Any? {
                 if (valueId == ContentLoaderDeserializeContext::class.java) {
                     return ContentLoaderDeserializeContext(context.root, dir, contentPath)
+                }
+                if (valueId == CommitInfo::class.qualifiedName) {
+                    return context.gitInfo[context.root.relativize(idxYml).toString().also { logger.debug { "Looking up $it" }}]
+                        ?.also { logger.debug { "found $it" } }
                 }
                 require(valueId is String)
                 logger.debug {

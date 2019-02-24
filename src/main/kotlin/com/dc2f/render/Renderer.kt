@@ -77,8 +77,8 @@ class Renderer(
             renderContent(node, metadata)
         }
         logger.info { "Finished rendering." }
-        logger.info { Timing.allTimings.joinToString(System.lineSeparator() + "    ", prefix = "${System.lineSeparator()}    ") { it.toString() } }
         logger.info { "cache Stats: ${loaderContext.cache.allStatistics}" }
+        logger.info { Timing.allToString() }
     }
 
     fun findRenderPath(node: ContentDef): RenderPath {
@@ -92,11 +92,16 @@ class Renderer(
         if (contentPath.isRoot) {
             return RenderPath.root
         }
-        val parent = findRenderPath(requireNotNull(loaderContext.contentByPath[contentPath.parent()]))
+        val parentContent = requireNotNull(loaderContext.contentByPath[contentPath.parent()])
+        val parentPath = findRenderPath(parentContent)
+
+        if ((parentContent as? WithRenderAlias)?.renderAlias() == node) {
+            return parentPath
+        }
 
         val slug = (node as? SlugCustomization)?.createSlug()
             ?:contentPath.name
-        return parent.child(slug)
+        return parentPath.child(slug)
     }
 
     fun findUriReferencePath(node: ContentDef): UriReferencePath {
@@ -141,9 +146,9 @@ class Renderer(
     private fun absoluteUrl(path: UriReferencePath) =
         path.absoluteUrl(urlConfig)
 
-    /** absolute url https://example.org/path/ */
-    fun absoluteUrl(page: ContentDef) =
-        absoluteUrl(findUriReferencePath(page))
+//    /** absolute url https://example.org/path/ */
+//    fun absoluteUrl(page: ContentDef) =
+//        absoluteUrl(findUriReferencePath(page))
 
     fun href(page: ContentDef, absoluteUrl: Boolean): String =
         href(findUriReferencePath(page), absoluteUrl)

@@ -68,6 +68,9 @@ dependencies {
     // google sitemap generator
     compile("com.github.dfabulich:sitemapgen4j:1.1.2")
 
+    // git support for geting last modified date.
+    implementation("org.eclipse.jgit:org.eclipse.jgit:5.2.1.201812262042-r")
+
     // image io for reading images - jpeg support, bmp: ico support
     compile("com.twelvemonkeys.imageio:imageio-jpeg:3.4.1")
     compile("com.twelvemonkeys.imageio:imageio-bmp:3.4.1")
