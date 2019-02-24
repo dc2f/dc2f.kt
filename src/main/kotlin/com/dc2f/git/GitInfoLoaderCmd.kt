@@ -11,6 +11,11 @@ import java.time.temporal.ChronoField
 
 private val logger = KotlinLogging.logger {}
 
+/**
+ * Uses command line git command to fetch all the latest commit data (author, author date)
+ * for all files.
+ * This is basically a port of: https://github.com/bep/gitmap/blob/master/gitmap.go
+ */
 class GitInfoLoaderCmd(
     val path: Path
 ) {

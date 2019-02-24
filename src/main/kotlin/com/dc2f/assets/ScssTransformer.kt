@@ -17,6 +17,11 @@ fun CharSequence.splitAtLastOccurrence(char: Char): Pair<String, String> {
 
 data class DigestValue(val integrityAttrValue: String) : TransformerValue
 
+/**
+ * Calculates sha 256 hash of the resource. This must (obviously) be the last transformation.
+ * It will 1. change the file name to include the hash for cache-busting and 2. set a value containing the digest for
+ * the html `integrity` attribute.
+ */
 @Suppress("UnstableApiUsage")
 class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTransformerCacheKey("")) : Transformer<DigestValue> {
 
