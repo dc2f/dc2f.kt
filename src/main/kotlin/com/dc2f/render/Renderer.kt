@@ -41,7 +41,7 @@ class UrlConfig(
     val host: String = "example.org"
 ) {
 
-    internal val urlProtocol: URLProtocol by lazy {
+    val urlProtocol: URLProtocol by lazy {
         URLProtocol.createOrDefault(protocol)
     }
 }
