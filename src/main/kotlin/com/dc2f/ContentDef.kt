@@ -66,9 +66,16 @@ interface WithRenderPathAliases {
     fun renderPathAliases(renderer: Renderer): List<RenderPath>? = null
 }
 
-interface WithRenderAlias {
+/**
+ * The content of this page is basically a "symlink" to another content the content
+ * returned by [contentSymlink] will be rendered at the location of this node.
+ *
+ * A typical use case is to have a folder with an `index` property which should be placed in the
+ * location of this node.
+ */
+interface WithContentSymlink {
     @JvmDefault
-    fun renderAlias(): ContentDef? = null
+    fun contentSymlink(): ContentDef? = null
 }
 
 interface WithUriReferencePathOverride {

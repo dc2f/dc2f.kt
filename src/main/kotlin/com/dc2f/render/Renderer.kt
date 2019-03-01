@@ -97,7 +97,7 @@ class Renderer(
         val parentContent = requireNotNull(loaderContext.contentByPath[contentPath.parent()])
         val parentPath = findRenderPath(parentContent)
 
-        if ((parentContent as? WithRenderAlias)?.renderAlias() == node) {
+        if ((parentContent as? WithContentSymlink)?.contentSymlink() == node) {
             return parentPath
         }
 
