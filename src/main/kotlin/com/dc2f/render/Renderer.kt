@@ -76,7 +76,8 @@ class Renderer(
             clear()
         }
         renderTiming.measure {
-            renderContent(node, metadata)
+            renderContent(node, metadata, forOutputType = OutputType.html)
+            renderContent(node, metadata, forOutputType = OutputType.robotsTxt)
         }
         logger.info { "Finished rendering." }
         logger.info { "cache Stats: ${loaderContext.cache.allStatistics}" }
@@ -115,13 +116,9 @@ class Renderer(
         return UriReferencePath.fromRenderPath(findRenderPath(node))
     }
 
-    fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null) {
+    fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null, forOutputType: OutputType) {
         val renderPath = findRenderPath(node)
-        val renderPathFile = if (renderPath.isLeaf) {
-            renderPath
-        } else {
-            renderPath.childLeaf("index.html")
-        }
+        val renderPathFile = forOutputType.fileForRenderPath(renderPath)
 
         val dir = target.resolve(renderPathFile.parent().toString())
         Files.createDirectories(dir)
@@ -133,8 +130,9 @@ class Renderer(
                     metadata = previousContext?.metadata ?: metadata,
                     theme = theme,
                     out = writer,
-                    renderer = this
-                ).renderToHtml()
+                    renderer = this,
+                    forOutputType = forOutputType
+                ).render()
             }
 
             (node as? WithRenderPathAliases)?.renderPathAliases(this)?.let {
@@ -179,8 +177,9 @@ class Renderer(
             theme = theme,
             out = AppendableOutput(writer),
             renderer = this,
-            enclosingNode = previousContext.node
-        ).renderToHtml()
+            enclosingNode = previousContext.node,
+            forOutputType = previousContext.forOutputType
+        ).render()
         return writer.toString()
     }
 

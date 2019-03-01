@@ -18,6 +18,26 @@ import kotlin.reflect.full.isSuperclassOf
 
 private val logger = KotlinLogging.logger {}
 
+abstract class OutputType(val name: String) {
+    protected abstract fun indexFileForRenderPath(folderRenderPath: RenderPath): RenderPath
+
+    fun fileForRenderPath(renderPath: RenderPath) =
+        if (renderPath.isLeaf) {
+            renderPath
+        } else {
+            indexFileForRenderPath(renderPath)
+        }
+
+    class SimpleOutputType(name: String, private val indexFileName: String) : OutputType(name) {
+        override fun indexFileForRenderPath(folderRenderPath: RenderPath): RenderPath = folderRenderPath.childLeaf(indexFileName)
+    }
+
+    companion object {
+        val html = SimpleOutputType("html", "index.html")
+        val robotsTxt = SimpleOutputType("robots.txt", "robots.txt")
+    }
+}
+
 abstract class Theme {
 
     val config: ThemeConfig = ThemeConfig()
@@ -29,9 +49,10 @@ abstract class Theme {
 
     abstract fun configure(config: ThemeConfig)
 
-    internal fun <T: ContentDef> findRenderer(node: T): ThemeConfig.RenderConfig<*> =
+    internal fun <T: ContentDef> findRenderer(node: T, forOutputType: OutputType): ThemeConfig.RenderConfig<*> =
         // for now we don't support having more than one renderer for each type.
-        config.renderers.first { it.canRender(node) }
+        requireNotNull(config.renderers[forOutputType]) { "Output Type has no configured renderers $forOutputType" }
+            .first { it.canRender(node) }
 
     /**
      * Provide a "title" for links to this content.
@@ -170,7 +191,8 @@ data class RenderContext<T : ContentDef>(
     val theme: Theme,
     val out: RenderOutput,
     val renderer: Renderer,
-    val enclosingNode: ContentDef? = null
+    val enclosingNode: ContentDef? = null,
+    val forOutputType: OutputType
 ) {
     val content get() = node
     val context get() = this
@@ -182,9 +204,9 @@ data class RenderContext<T : ContentDef>(
             appendHTML()
         }
 
-    fun renderToHtml() {
+    fun render() {
         @Suppress("UNCHECKED_CAST")
-        val renderer = theme.findRenderer(this.node)
+        val renderer = theme.findRenderer(this.node, forOutputType = forOutputType)
             .renderer as RenderContext<T>.() -> Unit
         this.renderer()
     }
@@ -223,7 +245,7 @@ data class RenderContext<T : ContentDef>(
     fun<U: ContentDef> renderChildren(children: List<U>) {
         children.map { child ->
             val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
-            renderer.renderContent(child, metadata, this)
+            renderer.renderContent(child, metadata, this, forOutputType)
         }
     }
 
@@ -282,20 +304,24 @@ class ThemeConfig {
 
 
 
-    internal val renderers = mutableListOf<RenderConfig<*>>()
+    internal val renderers = mutableMapOf<OutputType, MutableList<RenderConfig<*>>>()
 
     inline fun <reified T : ContentDef> pageRenderer(
+        forOutputType: OutputType = OutputType.html,
 //        noinline fileName: (page: LoadedContent<T>) -> Path,
         noinline renderer: RenderContext<T>.() -> Unit
     ) {
         _registerPageRenderer(
+            forOutputType,
             RenderConfig(
                 T::class, renderer
             )
         )
     }
 
-    fun _registerPageRenderer(config: RenderConfig<*>) {
-        renderers.add(config)
+    @Suppress("FunctionName")
+    fun _registerPageRenderer(forOutputType: OutputType, config: RenderConfig<*>) {
+        renderers.getOrPut(forOutputType) { mutableListOf() }
+            .add(config)
     }
 }
