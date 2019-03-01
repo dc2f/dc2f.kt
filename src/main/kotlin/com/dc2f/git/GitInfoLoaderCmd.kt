@@ -71,6 +71,6 @@ class GitInfoLoaderCmd(
                 .map { fileName ->
                     fileName.substring(relativePrefix.length) to commitInfo
                 }
-        }.flatten().toMap()
+        }.flatten().toList().reversed().toMap()
     }
 }
