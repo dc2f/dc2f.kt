@@ -3,6 +3,8 @@ package com.dc2f.render
 import com.dc2f.*
 import com.dc2f.util.*
 import io.ktor.http.*
+import kotlinx.html.*
+import kotlinx.html.stream.appendHTML
 import mu.KotlinLogging
 import java.io.StringWriter
 import java.nio.file.*
@@ -134,8 +136,37 @@ class Renderer(
                     renderer = this
                 ).renderToHtml()
             }
+
+            (node as? WithRenderPathAliases)?.renderPathAliases(this)?.let {
+                writeRenderPathAliases(node, it)
+            }
         } catch (e: Throwable) {
             throw Exception("Error while rendering into $renderPath: ${e.message}", e)
+        }
+    }
+
+    private fun <T>writeRenderPathAliases(node: T, renderPathAliases: List<RenderPath>) where T: ContentDef {
+        val targetRenderPath = findRenderPath(node)
+        val targetUrl = absoluteUrl(UriReferencePath.fromRenderPath(targetRenderPath))
+        renderPathAliases.forEach { alias ->
+            val renderPathFile = alias.childLeaf("index.html")
+            val dir = target.resolve(renderPathFile.parent().toString())
+            Files.createDirectories(dir)
+            Files.newBufferedWriter(dir.resolve(renderPathFile.name)).use { writer->
+                writer.appendHTML(prettyPrint = false).html {
+                    head {
+                        link(href = targetUrl) {
+                            rel = "canonical"
+                        }
+                        meta("robots", "noindex")
+                        meta(charset = "utf-8")
+                        meta {
+                            httpEquiv = "refresh"
+                            content = "0; url=$targetUrl"
+                        }
+                    }
+                }
+            }
         }
     }
 

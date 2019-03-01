@@ -61,6 +61,11 @@ interface WithRenderPathOverride {
     fun renderPath(renderer: Renderer): RenderPath? = null
 }
 
+interface WithRenderPathAliases {
+    @JvmDefault
+    fun renderPathAliases(renderer: Renderer): List<RenderPath>? = null
+}
+
 interface WithRenderAlias {
     @JvmDefault
     fun renderAlias(): ContentDef? = null
