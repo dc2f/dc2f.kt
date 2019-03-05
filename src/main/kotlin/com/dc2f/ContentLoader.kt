@@ -5,7 +5,6 @@ import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
 import com.fasterxml.jackson.databind.*
-import com.fasterxml.jackson.databind.introspect.AnnotatedMethod
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -349,6 +348,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             process(
                 context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
                     .also { c ->
+                        logger.debug { c.toStringReflective() }
                         context.lastVerifyDuration.measure {
                             c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
                         }
@@ -363,33 +363,57 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 //        val module = SimpleModule()
 //        module.addDeserializer(Children::class.java, ChildrenDeserializer())
 
-        val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
+//        val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
+        val propertyTypes = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
+            .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
+            .toMap()
         val children = Files.list(dir)
-            .filter { Files.isDirectory(it) }
+//            .filter { Files.isDirectory(it) }
             .sorted()
             .map { child ->
-                logger.trace { "Checking child $child. $childTypes" }
-                val folderArgs = child.fileName.toString().split('.')
-                val (sort, slug, typeIdentifier) = when {
+
+                logger.trace { "Checking child $child." }
+                val fileName = child.fileName.toString()
+                val isProperty = fileName.startsWith('@')
+                val folderArgs = fileName
+                    .substring(isProperty.then { 1 } ?: 0)
+                    .split('.')
+
+                val (comment, slug, typeIdentifier) = when {
                     folderArgs.size == 3 -> folderArgs
                     folderArgs.size == 2 -> listOf(null) + folderArgs
-                    else -> listOf(null, null, null)
+                    else -> listOf(null, "", null)
                 }
-                logger.trace { "sort: $sort, slug: $slug, typeIdentifier: $typeIdentifier" }
-                when {
-                    sort != null -> childTypes[typeIdentifier]?.let { type ->
-                        requireNotNull(slug)
-                        @Suppress("UNCHECKED_CAST")
-                        ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(context, child, contentPath.child(slug))
-                    }?.let { PROPERTY_CHILDREN to it }
-                    slug != null -> childTypesForProperty(slug)?.get(typeIdentifier)?.let { type ->
-                        @Suppress("UNCHECKED_CAST")
-                        ContentLoader(type.kotlin as KClass<ContentDef>)
-                            ._load(context, child, contentPath.child("@$slug"))
-                    }?.let { slug to it }
-                    else -> null
-                }?.also { context.registerLoadedContent(it.second) }
+
+                val prefix = if (isProperty) { "@" } else { "" }
+                val propertyName = isProperty.then { slug } ?: ContentBranchDef<T>::children.name
+
+                logger.trace { "comment: $comment, slug: $slug, typeIdentifier: $typeIdentifier" }
+
+                if (Files.isRegularFile(child)) {
+                    return@map propertyTypes[typeIdentifier]?.let { propType ->
+                        val companion = propType.companionObjectInstance
+                        if (companion is Parsable<*>) {
+                            val childPath = contentPath.child(prefix + propertyName)
+                            propertyName to LoadedContent(
+                                context,
+                                companion.parseContent(context, child, childPath),
+                                ContentDefMetadata(childPath, fsPath = child)
+                            ).also(context::registerLoadedContent)
+                        } else {
+                            null
+                        }
+                    }
+                }
+
+                requireNotNull(slug)
+                requireNotNull(childTypesForProperty(propertyName)?.get(typeIdentifier)) {
+                    "Unable to fetch type for $propertyName and $typeIdentifier for $child"
+                }.let { type ->
+                    @Suppress("UNCHECKED_CAST")
+                    ContentLoader(type.kotlin as KClass<ContentDef>)
+                        ._load(context, child, contentPath.child(prefix + slug))
+                }.let { propertyName to it }.also { context.registerLoadedContent(it.second) }
             }.filter { it != null }.toList().filterNotNull().groupBy { it.first }.toMutableMap()
         logger.info { "Children: $children -- ${ReflectionToStringBuilder.toString(children)}" }
 
@@ -418,49 +442,47 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 return children[valueId]?.let { child ->
                     @Suppress("IMPLICIT_CAST_TO_ANY")
                     if (valueId == PROPERTY_CHILDREN) {
-                        logger.debug("injecting children: $child.")
+                        logger.debug("   injecting children: $child.")
                         child.map { it.second.content }
                     } else {
+                        logger.debug("   injecting property")
                         child[0].second.content
                     }
                     // FIXME maybe just use a default value instead of this hard coded stuff?
                     //       should actually work by simply specifying `= emptyList()` for
                     //       abstract classes. but probably not for interfaces?
-                } ?: (valueId == PROPERTY_CHILDREN).then { emptyList<ContentDef>() }
+                } ?: (valueId == PROPERTY_CHILDREN).then { emptyList<ContentDef>() }.also { logger.debug("Not Found!! ${it}") }
 
             }
 
         }
 //        children.forEach { key, value -> injectableValues.addValue(key, if (key == "children") { value } else { value[0] }) }
 
-        val propertyTypes = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
-            .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
-            .toMap()
-        Files.list(dir)
-            .filter { Files.isRegularFile(it) }
-            .map { file ->
-                val extension = file.fileName.toString().substringAfterLast('.')
-                val slug = file.fileName.toString().substringBeforeLast('.')
-                propertyTypes[extension]?.let { propType ->
-                    val companion = propType.companionObjectInstance
-                    if (companion is Parsable<*>) {
-                        val childPath = contentPath.child(slug)
-                        file to LoadedContent(
-                            context,
-                            companion.parseContent(context, file, childPath),
-                            ContentDefMetadata(childPath, fsPath = file)
-                        ).also(context::registerLoadedContent)
-                    } else {
-                        null
-                    }
-                }
-            }.forEach { pair ->
-                if (pair?.second != null) {
-                    val key = pair.first.fileName.toString().substringBefore('.')
-//                    injectableValues.addValue(key, pair.second)
-                    children[key] = listOf(key to pair.second)
-                }
-            }
+//        Files.list(dir)
+//            .filter { Files.isRegularFile(it) }
+//            .map { file ->
+//                val extension = file.fileName.toString().substringAfterLast('.')
+//                val slug = file.fileName.toString().substringBeforeLast('.')
+//                propertyTypes[extension]?.let { propType ->
+//                    val companion = propType.companionObjectInstance
+//                    if (companion is Parsable<*>) {
+//                        val childPath = contentPath.child(slug)
+//                        file to LoadedContent(
+//                            context,
+//                            companion.parseContent(context, file, childPath),
+//                            ContentDefMetadata(childPath, fsPath = file)
+//                        ).also(context::registerLoadedContent)
+//                    } else {
+//                        null
+//                    }
+//                }
+//            }.forEach { pair ->
+//                if (pair?.second != null) {
+//                    val key = pair.first.fileName.toString().substringBefore('.')
+////                    injectableValues.addValue(key, pair.second)
+//                    children[key] = listOf(key to pair.second)
+//                }
+//            }
 
         // Make _index.yml optional, if there are no required (non nestable) attributes.
         val fileContent = if (Files.exists(idxYml)) {
