@@ -4,7 +4,10 @@ import com.dc2f.git.*
 import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
+import com.fasterxml.jackson.annotation.JacksonInject
+import com.fasterxml.jackson.core.Version
 import com.fasterxml.jackson.databind.*
+import com.fasterxml.jackson.databind.introspect.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -14,15 +17,16 @@ import kotlinx.io.core.Closeable
 import mu.KotlinLogging
 import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
+import java.lang.reflect.Method
 import java.nio.file.*
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
-import kotlin.reflect.jvm.isAccessible
+import kotlin.reflect.jvm.*
 import kotlin.streams.toList
 
-const val PROPERTY_CHILDREN = "children"
+val PROPERTY_CHILDREN = ContentBranchDef<*>::children.name
 
 private val logger = KotlinLogging.logger {}
 
@@ -38,7 +42,7 @@ abstract class AbstractPathCompanion<T: AbstractPath<T>> {
 
     val root get() = construct(rootBuilder.build())
 
-    protected val rootBuilder
+    private val rootBuilder
         get() = URLBuilder(
             protocol = URLProtocol("dc2f", 8822),
             host = "content"
@@ -303,7 +307,29 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
         val objectMapper = ObjectMapper(YAMLFactory())
             .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
-            .registerModule(SimpleModule().also { module ->
+            .registerModule(object : SimpleModule() {
+                override fun setupModule(context: SetupContext) {
+                    super.setupModule(context)
+                    context.insertAnnotationIntrospector(object : AnnotationIntrospector() {
+                        override fun version(): Version = Version.unknownVersion()
+
+                        override fun findInjectableValue(m: AnnotatedMember): JacksonInject.Value? {
+
+                            if (m.member is Method) {
+                                if (ContentBranchDef::class.java.isAssignableFrom(m.declaringClass)) {
+                                    val childrenSetter =
+                                        requireNotNull(ContentBranchDef<*>::children.javaSetter)
+                                    if (childrenSetter.name == m.member.name) {
+                                        return JacksonInject.Value.forId(PROPERTY_CHILDREN)
+                                    }
+                                }
+                            }
+
+                            return super.findInjectableValue(m)
+                        }
+                    })
+                }
+            }.also { module ->
                 module.addDeserializer(ZonedDateTime::class.java, TolerantZonedDateTime())
                 module.addDeserializer(
                     ImageAsset::class.java,
@@ -360,13 +386,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
-//        val module = SimpleModule()
-//        module.addDeserializer(Children::class.java, ChildrenDeserializer())
 
-//        val childTypes = childTypesForProperty(ContentBranchDef<T>::children.name) ?: emptyMap()
         val propertyTypes = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
             .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
             .toMap()
+
+//        klass.memberProperties.find { it.findAnnotation<JacksonInject>() }
+
         val children = Files.list(dir)
 //            .filter { Files.isDirectory(it) }
             .sorted()
@@ -386,7 +412,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
 
                 val prefix = if (isProperty) { "@" } else { "" }
-                val propertyName = isProperty.then { slug } ?: ContentBranchDef<T>::children.name
+                val propertyName = isProperty.then { slug } ?: PROPERTY_CHILDREN
 
                 logger.trace { "comment: $comment, slug: $slug, typeIdentifier: $typeIdentifier" }
 
@@ -431,6 +457,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     return context.gitInfo[context.root.relativize(idxYml).toString().also { logger.debug { "Looking up $it" }}]
                         ?.also { logger.debug { "found $it" } }
                 }
+//                if (valueId is Children) {
                 require(valueId is String)
                 logger.debug {
                     "Need to inject ${ReflectionToStringBuilder.toString(
@@ -439,50 +466,23 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         ), ToStringStyle.SHORT_PREFIX_STYLE
                     )} --- $children"
                 }
+                val isListProperty = (forProperty?.member as? AnnotatedMethod)?.getParameterType(0)?.isTypeOrSuperTypeOf(List::class.java) == true
                 return children[valueId]?.let { child ->
+                    logger.debug("   injecting children: $child.")
                     @Suppress("IMPLICIT_CAST_TO_ANY")
-                    if (valueId == PROPERTY_CHILDREN) {
-                        logger.debug("   injecting children: $child.")
+                    if (isListProperty) {
                         child.map { it.second.content }
                     } else {
-                        logger.debug("   injecting property")
                         child[0].second.content
                     }
                     // FIXME maybe just use a default value instead of this hard coded stuff?
                     //       should actually work by simply specifying `= emptyList()` for
                     //       abstract classes. but probably not for interfaces?
-                } ?: (valueId == PROPERTY_CHILDREN).then { emptyList<ContentDef>() }.also { logger.debug("Not Found!! ${it}") }
+                } ?: (isListProperty).then { emptyList<ContentDef>() }.also { logger.debug("Not Found!! $it") }
 
             }
 
         }
-//        children.forEach { key, value -> injectableValues.addValue(key, if (key == "children") { value } else { value[0] }) }
-
-//        Files.list(dir)
-//            .filter { Files.isRegularFile(it) }
-//            .map { file ->
-//                val extension = file.fileName.toString().substringAfterLast('.')
-//                val slug = file.fileName.toString().substringBeforeLast('.')
-//                propertyTypes[extension]?.let { propType ->
-//                    val companion = propType.companionObjectInstance
-//                    if (companion is Parsable<*>) {
-//                        val childPath = contentPath.child(slug)
-//                        file to LoadedContent(
-//                            context,
-//                            companion.parseContent(context, file, childPath),
-//                            ContentDefMetadata(childPath, fsPath = file)
-//                        ).also(context::registerLoadedContent)
-//                    } else {
-//                        null
-//                    }
-//                }
-//            }.forEach { pair ->
-//                if (pair?.second != null) {
-//                    val key = pair.first.fileName.toString().substringBefore('.')
-////                    injectableValues.addValue(key, pair.second)
-//                    children[key] = listOf(key to pair.second)
-//                }
-//            }
 
         // Make _index.yml optional, if there are no required (non nestable) attributes.
         val fileContent = if (Files.exists(idxYml)) {

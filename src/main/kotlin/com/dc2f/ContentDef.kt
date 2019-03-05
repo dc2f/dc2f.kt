@@ -4,6 +4,7 @@ import com.dc2f.render.*
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
 import com.fasterxml.jackson.annotation.JacksonInject
+import jdk.nashorn.internal.objects.annotations.Setter
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -351,8 +352,14 @@ class ImageCache(val cache: CacheUtil) {
 //
 //}
 
+//@Target(AnnotationTarget.PROPERTY_SETTER)
+//annotation class Children
+
 interface ContentBranchDef<CHILD_TYPE: ContentDef> : ContentDef {
-    @get:JacksonInject(PROPERTY_CHILDREN) @set:JacksonInject(PROPERTY_CHILDREN)
+//    @set:Children
+    /**
+     * This is a special property. [ContentBranchDef::children] will be used for the children.
+     */
     var children: List<CHILD_TYPE>
 
 }
