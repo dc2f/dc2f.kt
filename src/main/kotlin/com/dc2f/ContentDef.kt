@@ -3,8 +3,6 @@ package com.dc2f
 import com.dc2f.render.*
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
-import com.fasterxml.jackson.annotation.JacksonInject
-import jdk.nashorn.internal.objects.annotations.Setter
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -20,14 +18,16 @@ import javax.imageio.ImageIO
 
 private val logger = KotlinLogging.logger {}
 
-@Target(AnnotationTarget.CLASS) @Inherited
+@Target(AnnotationTarget.CLASS)
+@Inherited
 annotation class Nestable(val identifier: String)
+
 @Target(AnnotationTarget.CLASS)
 annotation class PropertyType(val identifier: String)
 
 interface ContentDef
 
-interface Renderable: ContentDef {
+interface Renderable : ContentDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
 
@@ -41,6 +41,7 @@ class Slug private constructor(private val value: String) : ContentDef, Validati
     companion object {
         val VALID_SLUG = Regex("^[a-zA-Z0-9_-]+$")
     }
+
     init {
         require(value.matches(VALID_SLUG)) {
             "Not a valid slug: $value (must adhere to pattern: $VALID_SLUG"
@@ -53,6 +54,7 @@ interface SlugCustomization {
 
     @JvmDefault
     fun slugGenerationValue(): String? = null
+
     @JvmDefault
     fun createSlug() = slug?.slug ?: slugGenerationValue()?.let { Slugify().slugify(it) }
 }
@@ -88,11 +90,12 @@ interface WithRedirect : WithUriReferencePathOverride {
     val redirect: ContentReference?
 
     @JvmDefault
-    override fun uriReferencePath(renderer: Renderer) = redirect?.let { renderer.findUriReferencePath(it) }
+    override fun uriReferencePath(renderer: Renderer) =
+        redirect?.let { renderer.findUriReferencePath(it) }
 }
 
-interface Parsable<T: ContentDef> {
-    abstract fun parseContent(
+interface Parsable<T : ContentDef> {
+    fun parseContent(
         context: LoaderContext,
         file: Path,
         contentPath: ContentPath
@@ -100,12 +103,13 @@ interface Parsable<T: ContentDef> {
 }
 
 // TODO: Maybe find a way to enforce the type of content which can be referenced?
-class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired, WithRenderPathOverride {
+class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired,
+    WithRenderPathOverride {
 
 //    @JsonCreator
 //    constructor(path: String) : this(ContentPath.parse(path))
 
-//    lateinit var referencedContentPath: ContentPath
+    //    lateinit var referencedContentPath: ContentPath
     lateinit var referencedContent: ContentDef
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
@@ -115,11 +119,13 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
         return null
     }
 
-    fun referencedContentPath(loaderContext: LoaderContext) = loaderContext.findContentPath(referencedContent)
+    fun referencedContentPath(loaderContext: LoaderContext) =
+        loaderContext.findContentPath(referencedContent)
 
     fun href(renderContext: RenderContext<*>): String =
         renderContext.href(referencedContent)
 
+    @Suppress("unused")
     fun hrefRenderable(): Renderable = object : Renderable {
         override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
             href(renderContext)
@@ -141,11 +147,15 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         this.loaderContext = loaderContext
-        container = loaderContext.contentByPath[file.parent()] ?: return "Unable to find parent of file asset $file"
+        container = loaderContext.contentByPath[file.parent()]
+            ?: return "Unable to find parent of file asset $file"
         return null
     }
 
-    protected fun getTargetOutputPath(context: RenderContext<*>, fileName: String = name): Pair<RenderPath, Path> {
+    protected fun getTargetOutputPath(
+        context: RenderContext<*>,
+        fileName: String = name
+    ): Pair<RenderPath, Path> {
         val containerPath = context.renderer.findRenderPath(container)
         val renderPath = containerPath.childLeaf(fileName)
 
@@ -164,6 +174,8 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
         }
         return "/$uriReferencePath"
     }
+
+    @Suppress("unused")
     fun hrefRenderable(): Renderable = object : Renderable {
         override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String =
             href(renderContext)
@@ -224,7 +236,12 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         loaderContext.cache.cacheDirectory.toPath().resolve("dc2f-image-resize")
             .also { Files.createDirectories(it) }
 
-    fun resize(context: RenderContext<*>, width: Int, height: Int, fillType: FillType): ResizedImage {
+    fun resize(
+        context: RenderContext<*>,
+        width: Int,
+        height: Int,
+        fillType: FillType
+    ): ResizedImage {
         val cachePath = cachePath(context.renderer.loaderContext)
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
@@ -238,7 +255,7 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
                 logger.info { "Image not found in cache. need to recompute $cacheKey" }
                 val original = ImageIO.read(fsPath.toFile())
                 val thumbnails = Thumbnails.of(original)
-                when(fillType) {
+                when (fillType) {
                     FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
                     FillType.Fit -> thumbnails.size(width, height)
                     FillType.Transform -> thumbnails.forceSize(width, height)
@@ -266,7 +283,8 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         return ResizedImage(
             "/$renderPath",
             cachedData.width,
-            cachedData.height)
+            cachedData.height
+        )
     }
 
     private fun doResize() {
@@ -276,7 +294,8 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         imageCache().imageInfoCache.cached(
             ImageInfoCacheKey(
                 fsPath.toString(),
-                fileSize)
+                fileSize
+            )
         ) {
             ImageUtil.readImageData(fsPath)
                 ?: throw IllegalArgumentException("Invalid image at $fsPath")
@@ -285,8 +304,16 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
 }
 
 data class ImageInfoCacheKey(val imageFsPath: String, val imageFileSize: Long) : Serializable
-data class ImageResizeCacheKey(val imageContentPath: String, val imageFileSize: Long, val width: Int, val height: Int, val fillTypeName: String) : Serializable
-data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val height: Int) : Serializable
+data class ImageResizeCacheKey(
+    val imageContentPath: String,
+    val imageFileSize: Long,
+    val width: Int,
+    val height: Int,
+    val fillTypeName: String
+) : Serializable
+
+data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val height: Int) :
+    Serializable
 
 class ImageCache(val cache: CacheUtil) {
 
@@ -300,7 +327,8 @@ class ImageCache(val cache: CacheUtil) {
                     ResourcePoolsBuilder.newResourcePoolsBuilder()
                         .heap(50, EntryUnit.ENTRIES)
                         .disk(50, MemoryUnit.MB, true)
-                ))
+                )
+            )
 
     }
 
@@ -314,7 +342,8 @@ class ImageCache(val cache: CacheUtil) {
                     ResourcePoolsBuilder.newResourcePoolsBuilder()
                         .heap(50, EntryUnit.ENTRIES)
                         .disk(50, MemoryUnit.MB, true)
-                ))
+                )
+            )
     }
 
     val assetPipelineCache: Cache<AssetPipelineCacheKey, AssetPipelineCacheValue> by lazy {
@@ -327,7 +356,8 @@ class ImageCache(val cache: CacheUtil) {
                     ResourcePoolsBuilder.newResourcePoolsBuilder()
                         .heap(50, EntryUnit.ENTRIES)
                         .disk(50, MemoryUnit.MB, true)
-                ))
+                )
+            )
     }
 
 }
@@ -355,7 +385,7 @@ class ImageCache(val cache: CacheUtil) {
 //@Target(AnnotationTarget.PROPERTY_SETTER)
 //annotation class Children
 
-interface ContentBranchDef<CHILD_TYPE: ContentDef> : ContentDef {
+interface ContentBranchDef<CHILD_TYPE : ContentDef> : ContentDef {
 //    @set:Children
     /**
      * This is a special property. [ContentBranchDef::children] will be used for the children.
@@ -364,7 +394,7 @@ interface ContentBranchDef<CHILD_TYPE: ContentDef> : ContentDef {
 
 }
 
-interface Website<CHILD_TYPE: ContentDef> : ContentBranchDef<CHILD_TYPE> {
+interface Website<CHILD_TYPE : ContentDef> : ContentBranchDef<CHILD_TYPE> {
     val name: String
 }
 
