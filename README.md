@@ -2,6 +2,11 @@
 
 Still under heavy development. ;-)
 
+## Example Website
+
+For a live production website take a look at [https://anlage.app](https://anlage.app).
+The full source code is available on github: https://github.com/hpoul/finalyzer-dc2f-site
+
 ## Main focus
 
 * Semantic Content, Type Safety
