@@ -58,17 +58,17 @@ root/
     _index.yml
     001.my-first-blog-post.article/
       _index.yml
-      body.md
+      @body.md
     002.another-blog-post.article/
       _index.yml
-      body.md
+      @body.md
     [...]
 ```
 
 So right now, each file or directory has one of the following structure:
 
-* *sortorder*`.`*slug*`.`*type* (e.g. 001.my-first-blog-post.article)
-* *propertyname*`.`*type* (e.g. body.md)
+* *sortorder*`.`*slug*`.`*type* (e.g. 001.my-first-blog-post.article) -- sortorder can also be a date or anything, really
+* @*propertyname*`.`*type* (e.g. @body.md) -- although properties can themselves also be other rich content types.
 
 The definition of the above structure could look like:
 
