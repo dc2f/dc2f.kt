@@ -352,6 +352,11 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             .registerModule(MrBeanModule())
     }
 
+    fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
+    fun findPropertyTypes() = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
+        .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
+        .toMap()
+
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
         logger.trace { "Loading childTypes for $propertyName of $klass." }
         val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
@@ -394,9 +399,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
 
-        val propertyTypes = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
-            .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
-            .toMap()
+        val propertyTypes = findPropertyTypes()
 
 //        klass.memberProperties.find { it.findAnnotation<JacksonInject>() }
 
