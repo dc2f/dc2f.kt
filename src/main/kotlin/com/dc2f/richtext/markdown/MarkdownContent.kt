@@ -41,6 +41,7 @@ typealias ValidationRequiredLambda = (context: LoaderContext) -> String
 
 val VALIDATORS = DataKey<MutableList<ValidationRequiredLambda>>("VALIDATORS") { mutableListOf() }
 val LOADER_CONTEXT = DataKey<LoaderContext>("LOADER_CONTEXT", null as LoaderContext?)
+val PARENT = DataKey<ContentDef?>("PARENT", null as ContentDef?)
 val RENDER_CONTEXT = DataKey<RenderContext<*>>("RENDER_CONTEXT", null as RenderContext<*>?)
 
 class ValidationException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -64,6 +65,7 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
                 // validate internal link.
                 val loaderContext = requireNotNull(context.options[LOADER_CONTEXT])
                 val renderContext = context.options[RENDER_CONTEXT]
+                val parent = context.options[PARENT]
 
                 if (link.url.startsWith('@')) {
                     if (renderContext == null) {
@@ -75,7 +77,9 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
                         LinkStatus.VALID)
                 }
 
-                val linkedContent = loaderContext.contentByPath[ContentPath.parse(link.url)]
+                val parentContentPath = parent?.let { loaderContext.findContentPath(it) }
+
+                val linkedContent = loaderContext.contentByPath[parentContentPath?.resolve(link.url) ?: ContentPath.parse(link.url)]
                     ?: throw ValidationException("Invalid link: ${link.toStringReflective()}")
 
                 return renderContext?.let { renderContext ->
@@ -97,8 +101,8 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
             }
         } catch (e: ValidationException) {
             logger.error(e) { "temporarily disabled link errors." }
-            return link
-//            throw ValidationException("Invalid link (malformed URL): ${link.toStringReflective()}, ${e.message}", e)
+//            return link
+            throw ValidationException("Invalid link (malformed URL): ${link.toStringReflective()}, ${e.message}", e)
         }
         logger.debug { "We need to resolve link ${link.toStringReflective()} for $node" }
         // absolute links are kept as they are...
@@ -211,6 +215,7 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
         HtmlRenderer.builder(
             options
                 .set(LOADER_CONTEXT, loaderContext)
+                .set(PARENT, renderContext?.node)
                 .set(RENDER_CONTEXT, renderContext)
                 .set(HtmlRenderer.NO_P_TAGS_USE_BR, asInlineContent)
         ).build()
@@ -249,7 +254,9 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         return try {
             HtmlRenderer.builder(
-                options.set(LOADER_CONTEXT, loaderContext)
+                options
+                    .set(LOADER_CONTEXT, loaderContext)
+                    .set(PARENT, parent.content)
             ).build()
                 .render(parsedContent(loaderContext))
             null
