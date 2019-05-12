@@ -3,6 +3,7 @@ package com.dc2f
 import com.dc2f.render.*
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
+import com.fasterxml.jackson.annotation.JsonIgnore
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -143,7 +144,8 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     val name: String get() = fsPath.fileName.toString()
 
     private lateinit var container: ContentDef
-    internal lateinit var loaderContext: LoaderContext
+    @JsonIgnore
+    protected lateinit var loaderContext: LoaderContext
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         this.loaderContext = loaderContext
