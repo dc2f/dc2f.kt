@@ -163,7 +163,7 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     }
 
     protected fun getTargetOutputPath(
-        context: RenderContext<*>,
+        context: FileRenderContext<*>,
         fileName: String = name
     ): Pair<RenderPath, Path> {
         val containerPath = context.renderer.findRenderPath(container)
@@ -173,10 +173,17 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     }
 
     fun href(context: RenderContext<*>, absoluteUri: Boolean = false): String {
-        val (renderPath, targetPath) = getTargetOutputPath(context)
-        Files.createDirectories(targetPath.parent)
-        if (!Files.exists(targetPath)) {
-            Files.copy(fsPath, targetPath)
+        val renderPath = if (context is FileRenderContext) {
+            val (renderPath, targetPath) = getTargetOutputPath(context)
+            Files.createDirectories(targetPath.parent)
+            if (!Files.exists(targetPath)) {
+                Files.copy(fsPath, targetPath)
+            }
+            renderPath
+        } else {
+            logger.warn { "We are not rendering to files, so we can't resolve output path!" }
+            context.renderer.findRenderPath(container)
+                .childLeaf(name)
         }
         val uriReferencePath = UriReferencePath.fromRenderPath(renderPath)
         if (absoluteUri) {
@@ -252,6 +259,11 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         height: Int,
         fillType: FillType
     ): ResizedImage {
+        if (context !is FileRenderContext) {
+            logger.warn { "We are not rendering to file system. can't resize image." }
+            return ResizedImage("/unrendered/$width/$height", width, height)
+        }
+
         val cachePath = cachePath(context.renderer.loaderContext)
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"

@@ -15,7 +15,8 @@ private val logger = KotlinLogging.logger {}
 /**
  * Path which is used during rendering to decide where to write content in the file system.
  */
-class RenderPath private constructor(url: Url) : AbstractPath<RenderPath>(RenderPath.Companion, url) {
+class RenderPath private constructor(url: Url) :
+    AbstractPath<RenderPath>(RenderPath.Companion, url) {
 
     companion object : AbstractPathCompanion<RenderPath>() {
         override val construct get() = ::RenderPath
@@ -25,7 +26,8 @@ class RenderPath private constructor(url: Url) : AbstractPath<RenderPath>(Render
 /**
  * Path used to reference content from OUTSIDE. ie. which will be used in links.
  */
-class UriReferencePath private constructor(url: Url) : AbstractPath<UriReferencePath>(UriReferencePath.Companion, url) {
+class UriReferencePath private constructor(url: Url) :
+    AbstractPath<UriReferencePath>(UriReferencePath.Companion, url) {
     companion object : AbstractPathCompanion<UriReferencePath>() {
         fun fromRenderPath(renderPath: RenderPath) =
             renderPath.transform(this)
@@ -48,42 +50,7 @@ class UrlConfig(
     }
 }
 
-
-class Renderer(
-    private val theme: Theme,
-    private val target: Path,
-    val loaderContext: LoaderContext,
-    val urlConfig: UrlConfig
-) {
-
-    val clearTiming = Timing("clear")
-    val renderTiming = Timing("render")
-
-    private fun clear() {
-        if (!Files.exists(target)) {
-            return;
-        }
-        Files.walk(target)
-            .sorted(Comparator.reverseOrder())
-//            .map(Path::toFile)
-            .peek { logger.debug { "Deleting $it" }}
-            .forEach(Files::delete);
-    }
-
-    fun renderWebsite(node: ContentDef, metadata: ContentDefMetadata) {
-        // first clear target directory
-        clearTiming.measure {
-            clear()
-        }
-        renderTiming.measure {
-            renderContent(node, metadata, forOutputType = OutputType.html)
-            renderContent(node, metadata, forOutputType = OutputType.robotsTxt)
-        }
-        logger.info { "Finished rendering." }
-        logger.info { "cache Stats: ${loaderContext.cache.allStatistics}" }
-        logger.info { Timing.allToString() }
-    }
-
+abstract class Renderer(val loaderContext: LoaderContext, val urlConfig: UrlConfig) {
     fun findRenderPath(node: ContentDef): RenderPath {
         (node as? WithRenderPathOverride)
             ?.renderPath(this)
@@ -103,7 +70,7 @@ class Renderer(
         }
 
         val slug = (node as? SlugCustomization)?.createSlug()
-            ?:contentPath.name
+            ?: contentPath.name
         return parentPath.child(slug)
     }
 
@@ -116,7 +83,111 @@ class Renderer(
         return UriReferencePath.fromRenderPath(findRenderPath(node))
     }
 
-    fun renderContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>? = null, forOutputType: OutputType) {
+    protected fun absoluteUrl(path: UriReferencePath) =
+        path.absoluteUrl(urlConfig)
+
+    fun href(page: ContentDef, absoluteUrl: Boolean): String =
+        href(findUriReferencePath(page), absoluteUrl)
+
+    fun href(uriReferencePath: UriReferencePath, absolute: Boolean): String =
+        absolute.then { absoluteUrl(uriReferencePath) }
+            ?: when (uriReferencePath) {
+                UriReferencePath.root -> "/"
+                else -> "/$uriReferencePath/"
+            }
+
+    abstract fun renderContent(
+        node: ContentDef,
+        metadata: ContentDefMetadata,
+        previousContext: RenderContext<*>? = null,
+        forOutputType: OutputType
+    )
+
+
+    fun renderPartialContent(
+        node: ContentDef,
+        metadata: ContentDefMetadata,
+        previousContext: RenderContext<*>
+    ): String {
+        val writer = StringWriter()
+
+        previousContext.createSubContext(
+            node = node,
+            out = AppendableOutput(writer)
+        ).render()
+
+        return writer.toString()
+    }
+}
+
+class SinglePageStreamRenderer(
+    private val theme: Theme,
+    loaderContext: LoaderContext,
+    urlConfig: UrlConfig,
+    private val renderOutput: RenderOutput
+) : Renderer(loaderContext, urlConfig) {
+
+    override fun renderContent(
+        node: ContentDef,
+        metadata: ContentDefMetadata,
+        previousContext: RenderContext<*>?,
+        forOutputType: OutputType
+    ) {
+        BaseRenderContext(
+            node = node,
+            metadata = previousContext?.metadata ?: metadata,
+            theme = theme,
+            out = renderOutput,
+            renderer = this,
+            forOutputType = forOutputType
+        ).render()
+    }
+
+}
+
+
+class FileOutputRenderer(
+    private val theme: Theme,
+    private val target: Path,
+    loaderContext: LoaderContext,
+    urlConfig: UrlConfig
+) : Renderer(loaderContext, urlConfig) {
+
+    val clearTiming = Timing("clear")
+    val renderTiming = Timing("render")
+
+    private fun clear() {
+        if (!Files.exists(target)) {
+            return
+        }
+        Files.walk(target)
+            .sorted(Comparator.reverseOrder())
+//            .map(Path::toFile)
+            .peek { logger.debug { "Deleting $it" } }
+            .forEach(Files::delete);
+    }
+
+    fun renderWebsite(node: ContentDef, metadata: ContentDefMetadata) {
+        // first clear target directory
+        clearTiming.measure {
+            clear()
+        }
+        renderTiming.measure {
+            renderContent(node, metadata, forOutputType = OutputType.html)
+            renderContent(node, metadata, forOutputType = OutputType.robotsTxt)
+        }
+        logger.info { "Finished rendering." }
+        logger.info { "cache Stats: ${loaderContext.cache.allStatistics}" }
+        logger.info { Timing.allToString() }
+    }
+
+
+    override fun renderContent(
+        node: ContentDef,
+        metadata: ContentDefMetadata,
+        previousContext: RenderContext<*>?,
+        forOutputType: OutputType
+    ) {
         val renderPath = findRenderPath(node)
         val renderPathFile = forOutputType.fileForRenderPath(renderPath)
 
@@ -124,14 +195,17 @@ class Renderer(
         Files.createDirectories(dir)
         try {
             LazyFileRenderOutput(dir.resolve(renderPathFile.name)).use { writer ->
-                RenderContext(
-                    rootPath = previousContext?.rootPath ?: dir,
-                    node = node,
-                    metadata = previousContext?.metadata ?: metadata,
-                    theme = theme,
-                    out = writer,
-                    renderer = this,
-                    forOutputType = forOutputType
+                val previousFileContext = previousContext as? FileRenderContext
+                FileRenderContext(
+                    BaseRenderContext(
+                        node = node,
+                        metadata = previousContext?.metadata ?: metadata,
+                        theme = theme,
+                        out = writer,
+                        renderer = this,
+                        forOutputType = forOutputType
+                    ),
+                    rootPath = previousFileContext?.rootPath ?: dir
                 ).render()
             }
 
@@ -143,14 +217,17 @@ class Renderer(
         }
     }
 
-    private fun <T>writeRenderPathAliases(node: T, renderPathAliases: List<RenderPath>) where T: ContentDef {
+    private fun <T> writeRenderPathAliases(
+        node: T,
+        renderPathAliases: List<RenderPath>
+    ) where T : ContentDef {
         val targetRenderPath = findRenderPath(node)
         val targetUrl = absoluteUrl(UriReferencePath.fromRenderPath(targetRenderPath))
         renderPathAliases.forEach { alias ->
             val renderPathFile = alias.childLeaf("index.html")
             val dir = target.resolve(renderPathFile.parent().toString())
             Files.createDirectories(dir)
-            Files.newBufferedWriter(dir.resolve(renderPathFile.name)).use { writer->
+            Files.newBufferedWriter(dir.resolve(renderPathFile.name)).use { writer ->
                 writer.appendHTML(prettyPrint = false).html {
                     head {
                         link(href = targetUrl) {
@@ -168,40 +245,6 @@ class Renderer(
         }
     }
 
-    fun renderPartialContent(node: ContentDef, metadata: ContentDefMetadata, previousContext: RenderContext<*>): String {
-        val writer = StringWriter()
-        RenderContext(
-            rootPath = previousContext.rootPath,
-            node = node,
-            metadata = previousContext.metadata,
-            theme = theme,
-            out = AppendableOutput(writer),
-            renderer = this,
-            enclosingNode = previousContext.node,
-            forOutputType = previousContext.forOutputType
-        ).render()
-        return writer.toString()
-    }
 
-    private fun absoluteUrl(path: UriReferencePath) =
-        path.absoluteUrl(urlConfig)
 
-//    /** absolute url https://example.org/path/ */
-//    fun absoluteUrl(page: ContentDef) =
-//        absoluteUrl(findUriReferencePath(page))
-
-    fun href(page: ContentDef, absoluteUrl: Boolean): String =
-        href(findUriReferencePath(page), absoluteUrl)
-//        (page as? WithRenderPathOverride)?.renderPath(this)?.let { href(it, absoluteUrl) }
-//            ?: absoluteUrl.then { absoluteUrl(page) }
-//            ?: when (val path = findRenderPath(page)) {
-//                RenderPath.root -> "/"
-//                else -> "/$path/"
-
-    fun href(uriReferencePath: UriReferencePath, absolute: Boolean): String =
-        absolute.then { absoluteUrl(uriReferencePath) }
-            ?: when (uriReferencePath) {
-                UriReferencePath.root -> "/"
-                else -> "/$uriReferencePath/"
-            }
 }
