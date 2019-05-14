@@ -185,7 +185,7 @@ abstract class RenderOutput : Closeable {
     internal abstract fun appendHTML() : TagConsumer<Appendable>
 }
 
-interface RenderContext<T : ContentDef> {
+interface RenderContextData<T: ContentDef> {
     val node: T
     val metadata: ContentDefMetadata
     val theme: Theme
@@ -193,11 +193,22 @@ interface RenderContext<T : ContentDef> {
     val renderer: Renderer
     val enclosingNode: ContentDef?
     val forOutputType: OutputType
-    val context get() = this
     val rootNode get() = renderer.loaderContext.rootNode
+}
 
-    fun render()
+interface RenderContext<T : ContentDef> : RenderContextData<T> {
+
+    val context: RenderContext<T> get() = this
+
+    //    fun render()
     fun <U: ContentDef> createSubContext(node: U, out: RenderOutput) : RenderContext<U>
+
+    fun render() {
+        @Suppress("UNCHECKED_CAST")
+        val renderer = theme.findRenderer(this.node, forOutputType = forOutputType)
+            .renderer as RenderContext<T>.() -> Unit
+        this.renderer()
+    }
 
     fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
         renderer.href(page, absoluteUrl)
@@ -205,7 +216,13 @@ interface RenderContext<T : ContentDef> {
     fun<U: ContentDef> renderNode(content: U): String =
         renderer.renderPartialContent(content, metadata, this)
 
-    fun <U : ContentDef> renderChildren(children: List<U>)
+
+    fun<U: ContentDef> renderChildren(children: List<U>) {
+        children.map { child ->
+            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
+            renderer.renderContent(child, metadata, this, forOutputType)
+        }
+    }
 
     fun appendHTML() =
         out.run {
@@ -241,7 +258,7 @@ interface RenderContext<T : ContentDef> {
     }
 }
 
-data class BaseRenderContext<T : ContentDef>(
+data class BaseRenderContextData<T : ContentDef>(
     override val node: T,
     // the root metadata.
     override val metadata: ContentDefMetadata,
@@ -250,27 +267,22 @@ data class BaseRenderContext<T : ContentDef>(
     override val renderer: Renderer,
     override val enclosingNode: ContentDef? = null,
     override val forOutputType: OutputType
-) : RenderContext<T> {
-    val content get() = node
+) : RenderContextData<T> {
 
-    override fun render() {
-        @Suppress("UNCHECKED_CAST")
-        val renderer = theme.findRenderer(this.node, forOutputType = forOutputType)
-            .renderer as RenderContext<T>.() -> Unit
-        this.renderer()
-    }
+    @Suppress("UNCHECKED_CAST")
+    fun <U : ContentDef>createSubContextData(node: U, out: RenderOutput) =
+        (this as BaseRenderContextData<U>).copy(node = node, out = out)
+
+}
+
+class BaseRenderContext<T: ContentDef>(val data: BaseRenderContextData<T>) : RenderContextData<T> by data, RenderContext<T> {
+    val content get() = node
+    override val context: RenderContext<T> get() = this
 
     @Suppress("UNCHECKED_CAST")
     override fun <U : ContentDef>createSubContext(node: U, out: RenderOutput) =
-        (this as BaseRenderContext<U>).copy(node = node, out = out)
+        BaseRenderContext(data.createSubContextData(node = node, out = out))
 
-
-    override fun<U: ContentDef> renderChildren(children: List<U>) {
-        children.map { child ->
-            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
-            renderer.renderContent(child, metadata, this, forOutputType)
-        }
-    }
 
     inline fun<reified U: T> nodeType(): RenderContext<U>? {
         if (node is U) {
@@ -287,16 +299,16 @@ data class BaseRenderContext<T : ContentDef>(
 }
 
 class FileRenderContext<T: ContentDef>(
-    private val baseRenderContext: BaseRenderContext<T>,
+    private val baseRenderContextData: BaseRenderContextData<T>,
     val rootPath: Path
-    ) : RenderContext<T> by baseRenderContext {
+    ) : RenderContextData<T> by baseRenderContextData, RenderContext<T> {
 
     override fun <U : ContentDef> createSubContext(
         node: U,
         out: RenderOutput
     ): RenderContext<U> =
         FileRenderContext(
-            baseRenderContext.createSubContext(
+            baseRenderContextData.createSubContextData(
                 node = node, out = out
             ),
             rootPath = rootPath

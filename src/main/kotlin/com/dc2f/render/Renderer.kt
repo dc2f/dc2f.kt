@@ -134,12 +134,14 @@ class SinglePageStreamRenderer(
         forOutputType: OutputType
     ) {
         BaseRenderContext(
-            node = node,
-            metadata = previousContext?.metadata ?: metadata,
-            theme = theme,
-            out = renderOutput,
-            renderer = this,
-            forOutputType = forOutputType
+            BaseRenderContextData(
+                node = node,
+                metadata = previousContext?.metadata ?: metadata,
+                theme = theme,
+                out = renderOutput,
+                renderer = this,
+                forOutputType = forOutputType
+            )
         ).render()
     }
 
@@ -197,7 +199,7 @@ class FileOutputRenderer(
             LazyFileRenderOutput(dir.resolve(renderPathFile.name)).use { writer ->
                 val previousFileContext = previousContext as? FileRenderContext
                 FileRenderContext(
-                    BaseRenderContext(
+                    BaseRenderContextData(
                         node = node,
                         metadata = previousContext?.metadata ?: metadata,
                         theme = theme,
