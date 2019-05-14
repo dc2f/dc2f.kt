@@ -111,6 +111,7 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 //    constructor(path: String) : this(ContentPath.parse(path))
 
     //    lateinit var referencedContentPath: ContentPath
+    @Transient
     lateinit var referencedContent: ContentDef
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
@@ -143,8 +144,10 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
 
     val name: String get() = fsPath.fileName.toString()
 
+    @Transient
     private lateinit var container: ContentDef
     @JsonIgnore
+    @Transient
     protected lateinit var loaderContext: LoaderContext
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
