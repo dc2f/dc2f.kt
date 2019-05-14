@@ -171,7 +171,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
 }
 
 @PropertyType("md")
-class Markdown(private val content: String) : ContentDef, RichText, ValidationRequired {
+class Markdown(private val content: String) : ParsableContentDef, RichText, ValidationRequired {
 
     companion object : Parsable<Markdown> {
         override fun parseContent(
@@ -205,6 +205,7 @@ class Markdown(private val content: String) : ContentDef, RichText, ValidationRe
     }
 
     val rawContent get() = content
+    override fun rawContent(): String = content
 
     private fun parsedContent(context: LoaderContext, content: String = this.content): Document {
         require(context.phase.isAfter(LoaderContext.LoaderPhase.Loading))

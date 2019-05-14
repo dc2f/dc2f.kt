@@ -48,11 +48,12 @@ class PebbleRenderExtension : AbstractExtension() {
 @PropertyType("peb")
 class Pebble(
     private val content: String
-) : RichText, ValidationRequired {
+) : RichText, ParsableContentDef, ValidationRequired {
 
 //    val path: Path,
 //    private val contentPath: ContentPath
 
+    override fun rawContent(): String = content
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         return null

@@ -95,7 +95,12 @@ interface WithRedirect : WithUriReferencePathOverride {
         redirect?.let { renderer.findUriReferencePath(it) }
 }
 
-interface Parsable<T : ContentDef> {
+interface ParsableContentDef: ContentDef {
+    /** raw unparsed content, which is used to persist this value */
+    fun rawContent(): String
+}
+
+interface Parsable<T : ParsableContentDef> {
     fun parseContent(
         context: LoaderContext,
         file: Path,
