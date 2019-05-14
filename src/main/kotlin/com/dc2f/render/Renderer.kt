@@ -113,7 +113,8 @@ abstract class Renderer(val loaderContext: LoaderContext, val urlConfig: UrlConf
 
         previousContext.createSubContext(
             node = node,
-            out = AppendableOutput(writer)
+            out = AppendableOutput(writer),
+            enclosingNode = previousContext.node
         ).render()
 
         return writer.toString()

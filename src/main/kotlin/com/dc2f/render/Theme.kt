@@ -201,7 +201,11 @@ interface RenderContext<T : ContentDef> : RenderContextData<T> {
     val context: RenderContext<T> get() = this
 
     //    fun render()
-    fun <U: ContentDef> createSubContext(node: U, out: RenderOutput) : RenderContext<U>
+    fun <U: ContentDef> createSubContext(
+        node: U,
+        out: RenderOutput,
+        enclosingNode: ContentDef?
+    ) : RenderContext<U>
 
     fun render() {
         @Suppress("UNCHECKED_CAST")
@@ -270,8 +274,8 @@ data class BaseRenderContextData<T : ContentDef>(
 ) : RenderContextData<T> {
 
     @Suppress("UNCHECKED_CAST")
-    fun <U : ContentDef>createSubContextData(node: U, out: RenderOutput) =
-        (this as BaseRenderContextData<U>).copy(node = node, out = out)
+    fun <U : ContentDef>createSubContextData(node: U, out: RenderOutput, enclosingNode: ContentDef?) =
+        (this as BaseRenderContextData<U>).copy(node = node, out = out, enclosingNode = enclosingNode)
 
 }
 
@@ -280,8 +284,8 @@ class BaseRenderContext<T: ContentDef>(val data: BaseRenderContextData<T>) : Ren
     override val context: RenderContext<T> get() = this
 
     @Suppress("UNCHECKED_CAST")
-    override fun <U : ContentDef>createSubContext(node: U, out: RenderOutput) =
-        BaseRenderContext(data.createSubContextData(node = node, out = out))
+    override fun <U : ContentDef>createSubContext(node: U, out: RenderOutput, enclosingNode: ContentDef?) =
+        BaseRenderContext(data.createSubContextData(node = node, out = out, enclosingNode = enclosingNode))
 
 
     inline fun<reified U: T> nodeType(): RenderContext<U>? {
@@ -305,11 +309,14 @@ class FileRenderContext<T: ContentDef>(
 
     override fun <U : ContentDef> createSubContext(
         node: U,
-        out: RenderOutput
+        out: RenderOutput,
+        enclosingNode: ContentDef?
     ): RenderContext<U> =
         FileRenderContext(
             baseRenderContextData.createSubContextData(
-                node = node, out = out
+                node = node,
+                out = out,
+                enclosingNode = enclosingNode
             ),
             rootPath = rootPath
         )
