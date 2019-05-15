@@ -18,7 +18,7 @@ class Mustache(
     val content: String,
     val path: Path,
     private val contentPath: ContentPath
-) : RichText {
+) : RichText, ParsableContentDef {
 
     companion object : Parsable<Mustache> {
 
@@ -29,6 +29,8 @@ class Mustache(
         ): Mustache =
             Mustache(file.readString(), file, contentPath)
     }
+
+    override fun rawContent(): String = content
 
     override fun renderContent(renderContext: RenderContext<*>, arguments: Any?): String {
         val mustache = DefaultMustacheFactory().compile(content.reader(), path.toString())

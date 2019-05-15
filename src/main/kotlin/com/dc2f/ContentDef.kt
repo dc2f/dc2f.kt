@@ -3,6 +3,7 @@ package com.dc2f
 import com.dc2f.render.*
 import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
+import com.fasterxml.jackson.annotation.JsonIgnore
 import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
@@ -94,7 +95,12 @@ interface WithRedirect : WithUriReferencePathOverride {
         redirect?.let { renderer.findUriReferencePath(it) }
 }
 
-interface Parsable<T : ContentDef> {
+interface ParsableContentDef: ContentDef {
+    /** raw unparsed content, which is used to persist this value */
+    fun rawContent(): String
+}
+
+interface Parsable<T : ParsableContentDef> {
     fun parseContent(
         context: LoaderContext,
         file: Path,
@@ -110,6 +116,7 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 //    constructor(path: String) : this(ContentPath.parse(path))
 
     //    lateinit var referencedContentPath: ContentPath
+    @Transient
     lateinit var referencedContent: ContentDef
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
@@ -142,8 +149,11 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
 
     val name: String get() = fsPath.fileName.toString()
 
+    @Transient
     private lateinit var container: ContentDef
-    internal lateinit var loaderContext: LoaderContext
+    @JsonIgnore
+    @Transient
+    protected lateinit var loaderContext: LoaderContext
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         this.loaderContext = loaderContext
@@ -153,7 +163,7 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     }
 
     protected fun getTargetOutputPath(
-        context: RenderContext<*>,
+        context: FileRenderContext<*>,
         fileName: String = name
     ): Pair<RenderPath, Path> {
         val containerPath = context.renderer.findRenderPath(container)
@@ -163,10 +173,17 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     }
 
     fun href(context: RenderContext<*>, absoluteUri: Boolean = false): String {
-        val (renderPath, targetPath) = getTargetOutputPath(context)
-        Files.createDirectories(targetPath.parent)
-        if (!Files.exists(targetPath)) {
-            Files.copy(fsPath, targetPath)
+        val renderPath = if (context is FileRenderContext) {
+            val (renderPath, targetPath) = getTargetOutputPath(context)
+            Files.createDirectories(targetPath.parent)
+            if (!Files.exists(targetPath)) {
+                Files.copy(fsPath, targetPath)
+            }
+            renderPath
+        } else {
+            logger.warn { "We are not rendering to files, so we can't resolve output path!" }
+            context.renderer.findRenderPath(container)
+                .childLeaf(name)
         }
         val uriReferencePath = UriReferencePath.fromRenderPath(renderPath)
         if (absoluteUri) {
@@ -242,6 +259,11 @@ open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath)
         height: Int,
         fillType: FillType
     ): ResizedImage {
+        if (context !is FileRenderContext) {
+            logger.warn { "We are not rendering to file system. can't resize image." }
+            return ResizedImage("/unrendered/$width/$height", width, height)
+        }
+
         val cachePath = cachePath(context.renderer.loaderContext)
         val targetPathOrig = context.rootPath.resolve(file.toString())
         val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"

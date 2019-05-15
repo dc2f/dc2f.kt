@@ -124,12 +124,14 @@ class AssetPipeline(
 //        }
 
         val renderPath = outputDirectory.child(value.fileName)
-        val absFsPath = context.rootPath.resolve(renderPath.toString())
-        val cachedFsPath = cachePath.resolve(value.cachedFileName)
+        if (context is FileRenderContext) {
+            val absFsPath = context.rootPath.resolve(renderPath.toString())
+            val cachedFsPath = cachePath.resolve(value.cachedFileName)
 
-        if (!Files.exists(absFsPath)) {
-            Files.createDirectories(absFsPath.parent)
-            Files.createLink(absFsPath, cachedFsPath)
+            if (!Files.exists(absFsPath)) {
+                Files.createDirectories(absFsPath.parent)
+                Files.createLink(absFsPath, cachedFsPath)
+            }
         }
 //        result.contentReader.copyTo(MoreFiles.asCharSink(absFsPath, Charsets.UTF_8))
 //        if (!Files.exists(absPath)) {
@@ -183,26 +185,27 @@ abstract class RenderOutput : Closeable {
     internal abstract fun appendHTML() : TagConsumer<Appendable>
 }
 
-data class RenderContext<T : ContentDef>(
-    val rootPath: Path,
-    val node: T,
-    // the root metadata.
-    val metadata: ContentDefMetadata,
-    val theme: Theme,
-    val out: RenderOutput,
-    val renderer: Renderer,
-    val enclosingNode: ContentDef? = null,
+interface RenderContextData<T: ContentDef> {
+    val node: T
+    val metadata: ContentDefMetadata
+    val theme: Theme
+    val out: RenderOutput
+    val renderer: Renderer
+    val enclosingNode: ContentDef?
     val forOutputType: OutputType
-) {
-    val content get() = node
-    val context get() = this
     val rootNode get() = renderer.loaderContext.rootNode
+}
 
-    fun appendHTML() =
-        out.run {
-            appendln("<!DOCTYPE html>")
-            appendHTML()
-        }
+interface RenderContext<T : ContentDef> : RenderContextData<T> {
+
+    val context: RenderContext<T> get() = this
+
+    //    fun render()
+    fun <U: ContentDef> createSubContext(
+        node: U,
+        out: RenderOutput,
+        enclosingNode: ContentDef?
+    ) : RenderContext<U>
 
     fun render() {
         @Suppress("UNCHECKED_CAST")
@@ -211,9 +214,25 @@ data class RenderContext<T : ContentDef>(
         this.renderer()
     }
 
-    @Suppress("UNCHECKED_CAST")
-    fun <U : ContentDef>copyForNode(node: U) =
-        (this  as RenderContext<U>).copy(node = node)
+    fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
+        renderer.href(page, absoluteUrl)
+
+    fun<U: ContentDef> renderNode(content: U): String =
+        renderer.renderPartialContent(content, metadata, this)
+
+
+    fun<U: ContentDef> renderChildren(children: List<U>) {
+        children.map { child ->
+            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
+            renderer.renderContent(child, metadata, this, forOutputType)
+        }
+    }
+
+    fun appendHTML() =
+        out.run {
+            appendln("<!DOCTYPE html>")
+            appendHTML()
+        }
 
     fun getAsset(path: String): AssetPipeline {
         // TODO add caching
@@ -241,21 +260,33 @@ data class RenderContext<T : ContentDef>(
         }
         return resource.toUri()
     }
+}
 
-    fun<U: ContentDef> renderChildren(children: List<U>) {
-        children.map { child ->
-            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
-            renderer.renderContent(child, metadata, this, forOutputType)
-        }
-    }
+data class BaseRenderContextData<T : ContentDef>(
+    override val node: T,
+    // the root metadata.
+    override val metadata: ContentDefMetadata,
+    override val theme: Theme,
+    override val out: RenderOutput,
+    override val renderer: Renderer,
+    override val enclosingNode: ContentDef? = null,
+    override val forOutputType: OutputType
+) : RenderContextData<T> {
 
-    fun href(page: ContentDef, absoluteUrl: Boolean = false): String =
-        renderer.href(page, absoluteUrl)
+    @Suppress("UNCHECKED_CAST")
+    fun <U : ContentDef>createSubContextData(node: U, out: RenderOutput, enclosingNode: ContentDef?) =
+        (this as BaseRenderContextData<U>).copy(node = node, out = out, enclosingNode = enclosingNode)
 
-    fun<U: ContentDef> renderNode(content: U): String {
-//        val metadata = requireNotNull(metadata.childrenMetadata[content])
-        return renderer.renderPartialContent(content, metadata, this)
-    }
+}
+
+class BaseRenderContext<T: ContentDef>(val data: BaseRenderContextData<T>) : RenderContextData<T> by data, RenderContext<T> {
+    val content get() = node
+    override val context: RenderContext<T> get() = this
+
+    @Suppress("UNCHECKED_CAST")
+    override fun <U : ContentDef>createSubContext(node: U, out: RenderOutput, enclosingNode: ContentDef?) =
+        BaseRenderContext(data.createSubContextData(node = node, out = out, enclosingNode = enclosingNode))
+
 
     inline fun<reified U: T> nodeType(): RenderContext<U>? {
         if (node is U) {
@@ -269,6 +300,26 @@ data class RenderContext<T : ContentDef>(
     inline fun <reified U: T, RET> ifType(block: RenderContext<U>.() -> RET): RET? {
         return nodeType<U>()?.let(block)
     }
+}
+
+class FileRenderContext<T: ContentDef>(
+    private val baseRenderContextData: BaseRenderContextData<T>,
+    val rootPath: Path
+    ) : RenderContextData<T> by baseRenderContextData, RenderContext<T> {
+
+    override fun <U : ContentDef> createSubContext(
+        node: U,
+        out: RenderOutput,
+        enclosingNode: ContentDef?
+    ): RenderContext<U> =
+        FileRenderContext(
+            baseRenderContextData.createSubContextData(
+                node = node,
+                out = out,
+                enclosingNode = enclosingNode
+            ),
+            rootPath = rootPath
+        )
 }
 
 //open class PageRenderContext<T : ContentBranchDef<*>>(

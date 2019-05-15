@@ -4,7 +4,7 @@ import com.dc2f.git.*
 import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
-import com.fasterxml.jackson.annotation.JacksonInject
+import com.fasterxml.jackson.annotation.*
 import com.fasterxml.jackson.core.Version
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.introspect.*
@@ -78,7 +78,7 @@ abstract class AbstractPathCompanion<T: AbstractPath<T>> {
 
 open class AbstractPath<T: AbstractPath<T>>
     protected constructor(
-        val companion: AbstractPathCompanion<T>,
+        private val companion: AbstractPathCompanion<T>,
     /// implementation detail: We use the ktor Url internally to handle resolving, etc.
         protected val url: Url) {
 
@@ -196,7 +196,8 @@ class ContentDefMetadata(
     val path: ContentPath,
     val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap(),
     // If the content is the root object of a file (_index.yml), this will contain the path to it.
-    val fsPath: Path?
+    val fsPath: Path?,
+    val directChildren: Map<String, List<ContentDefChild>>
 )
 
 data class LoaderContext(
@@ -301,6 +302,12 @@ data class ContentLoaderDeserializeContext(
         root.resolve(path.toString())
 }
 
+data class ContentDefChild(
+    val name: String,
+    val loadedContent: LoadedContent<*>,
+    val isProperty: Boolean
+)
+
 class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     companion object {
@@ -345,6 +352,11 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             .registerModule(MrBeanModule())
     }
 
+    fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
+    fun findPropertyTypes() = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
+        .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
+        .toMap()
+
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
         logger.trace { "Loading childTypes for $propertyName of $klass." }
         val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
@@ -387,9 +399,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         require(Files.isDirectory(dir))
         val idxYml = dir.resolve("_index.yml")
 
-        val propertyTypes = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
-            .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
-            .toMap()
+        val propertyTypes = findPropertyTypes()
 
 //        klass.memberProperties.find { it.findAnnotation<JacksonInject>() }
 
@@ -421,11 +431,15 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         val companion = propType.companionObjectInstance
                         if (companion is Parsable<*>) {
                             val childPath = contentPath.child(prefix + propertyName)
-                            propertyName to LoadedContent(
+                            ContentDefChild(propertyName, LoadedContent(
                                 context,
                                 companion.parseContent(context, child, childPath),
-                                ContentDefMetadata(childPath, fsPath = child)
-                            ).also(context::registerLoadedContent)
+                                ContentDefMetadata(
+                                    childPath,
+                                    fsPath = child,
+                                    directChildren = emptyMap()
+                                )
+                            ).also(context::registerLoadedContent), isProperty)
                         } else {
                             null
                         }
@@ -439,8 +453,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     @Suppress("UNCHECKED_CAST")
                     ContentLoader(type.kotlin as KClass<ContentDef>)
                         ._load(context, child, contentPath.child(prefix + slug))
-                }.let { propertyName to it }.also { context.registerLoadedContent(it.second) }
-            }.filter { it != null }.toList().filterNotNull().groupBy { it.first }.toMutableMap()
+                }.let { ContentDefChild(propertyName, it, isProperty) }.also { context.registerLoadedContent(it.loadedContent) }
+            }.filter { it != null }.toList().filterNotNull().groupBy { it.name }.toMutableMap()
         logger.info { "Children: $children -- ${ReflectionToStringBuilder.toString(children)}" }
 
         val injectableValues = object : InjectableValues() {
@@ -471,9 +485,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     logger.debug("   injecting children: $child.")
                     @Suppress("IMPLICIT_CAST_TO_ANY")
                     if (isListProperty) {
-                        child.map { it.second.content }
+                        child.map { it.loadedContent.content }
                     } else {
-                        child[0].second.content
+                        child[0].loadedContent.content
                     }
                     // FIXME maybe just use a default value instead of this hard coded stuff?
                     //       should actually work by simply specifying `= emptyList()` for
@@ -505,12 +519,13 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             children.values
                 .flatten()
                 .map {
-                    it.second.metadata.childrenMetadata.entries.toPairs() +
-                        setOf(it.second.content to it.second.metadata)
+                    it.loadedContent.metadata.childrenMetadata.entries.toPairs() +
+                        setOf(it.loadedContent.content to it.loadedContent.metadata)
                 }
                 .flatten()
                 .toMap(),
-            idxYml
+            idxYml,
+            children
         )).also { context.registerLoadedContent(it) }.also {
             try {
                 validateContentDef(context, it, it.content)
