@@ -525,7 +525,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 .flatten()
                 .toMap(),
             idxYml,
-            children
+            directChildren = children
         )).also { context.registerLoadedContent(it) }.also {
             try {
                 validateContentDef(context, it, it.content)
