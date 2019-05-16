@@ -197,7 +197,8 @@ class ContentDefMetadata(
     val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap(),
     // If the content is the root object of a file (_index.yml), this will contain the path to it.
     val fsPath: Path?,
-    val directChildren: Map<String, List<ContentDefChild>>
+    val directChildren: Map<String, List<ContentDefChild>>,
+    val contentDefClass: KClass<out ContentDef>? = null
 )
 
 data class LoaderContext(
@@ -525,7 +526,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 .flatten()
                 .toMap(),
             idxYml,
-            directChildren = children
+            directChildren = children,
+            contentDefClass = klass
         )).also { context.registerLoadedContent(it) }.also {
             try {
                 validateContentDef(context, it, it.content)

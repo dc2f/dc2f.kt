@@ -179,7 +179,7 @@ class Markdown(private val content: String) : ParsableContentDef, RichText, Vali
             file: Path,
             contentPath: ContentPath
         ): Markdown =
-            parseContentString(Files.readAllLines(file).joinToString(System.lineSeparator()))
+            parseContentString(file.readString())
 
         fun parseContentString(str: String): Markdown {
             return Markdown(str)
