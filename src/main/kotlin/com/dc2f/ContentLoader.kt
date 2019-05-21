@@ -408,7 +408,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     }
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath, comment: String?): LoadedContent<T> {
-        require(Files.isDirectory(dir))
+        require(Files.isDirectory(dir)) { "Not a valid directory: ${dir.toAbsolutePath()}" }
         val idxYml = dir.resolve(INDEX_YAML_NAME)
 
         val propertyTypes = findPropertyTypes()

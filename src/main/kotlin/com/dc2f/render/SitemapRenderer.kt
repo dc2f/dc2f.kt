@@ -31,7 +31,10 @@ class SitemapRenderer(
             protocol = urlConfig.urlProtocol,
             host = urlConfig.host
         ).build()
-        val sitemap = WebSitemapGenerator(url.toString(), target.toFile())
+        val sitemap = WebSitemapGenerator.builder(url.toString(), target.toFile())
+            .dateFormat(W3CDateFormat().apply {
+                timeZone = W3CDateFormat.ZULU
+            }).build()
         renderRecursive(loaderContext.rootNode, sitemap)
         sitemap.write()//toFile(target.resolve("sitemap.xml"))
     }
@@ -45,7 +48,8 @@ class SitemapRenderer(
                             // TODO for now simply take the current date as modification date, if there
                             //      is no git information. We maybe should change this to the file system file,
                             //      or a fallback property defined by the user.
-                            node.commitInfo?.authorDate?.toInstant()?.let(Date::from) ?: Date())
+                            node.commitInfo?.authorDate?.toInstant()?.let(Date::from) ?: Date()
+                        )
                 )
             )
         }
