@@ -6,7 +6,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
  * This generated file contains a sample Kotlin library project to get you started.
  */
 
-val jacksonVersion = "2.9.4"
+val jacksonVersion = "2.9.9"
 
 group = "com.dc2f"
 version = "0.0.1-SNAPSHOT"
