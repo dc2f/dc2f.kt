@@ -27,6 +27,7 @@ import kotlin.reflect.jvm.*
 import kotlin.streams.toList
 
 val PROPERTY_CHILDREN = ContentBranchDef<*>::children.name
+val INDEX_YAML_NAME = "_index.yml"
 
 private val logger = KotlinLogging.logger {}
 
@@ -198,7 +199,11 @@ class ContentDefMetadata(
     // If the content is the root object of a file (_index.yml), this will contain the path to it.
     val fsPath: Path?,
     val directChildren: Map<String, List<ContentDefChild>>,
-    val contentDefClass: KClass<out ContentDef>? = null
+    val contentDefClass: KClass<out ContentDef>? = null,
+    /**
+     * The "comment" part of the file name, if any.
+     */
+    val comment: String?
 )
 
 data class LoaderContext(
@@ -225,7 +230,7 @@ data class LoaderContext(
     val contentByPath get(): Map<ContentPath, ContentDef> = contentByPathMutable
     private val validatorsCollector: MutableList<(loaderContext: LoaderContext) -> String?> = mutableListOf()
     val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
-    val registeredContent = mutableSetOf<ContentDef>()
+    val registeredContent = mutableSetOf<ObjectDef>()
     private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
     private val contentByFsPath = mutableMapOf<Path, ContentPath>()
     internal val lastLoadingDuration = Timing("loading")
@@ -241,12 +246,12 @@ data class LoaderContext(
 
     fun <T: ContentDef>registerLoadedContent(content: LoadedContent<T>) {
         contentByPathMutable[content.metadata.path] = content.content
-//        registerContentDef(content, content.content)
+//        registerObjectDef(content, content.content)
     }
 
     fun findContentPath(fsPath: Path) = contentByFsPath[fsPath]
 
-    fun <T: ContentDef> registerContentDef(parent: LoadedContent<T>, content: ContentDef) =
+    fun <T: ContentDef> registerObjectDef(parent: LoadedContent<T>, content: ObjectDef) =
         if (registeredContent.add(content)) {
             if (parent.metadata.fsPath != null) {
                 contentByFsPath.putIfAbsent(parent.metadata.fsPath.toAbsolutePath(), parent.metadata.path)
@@ -351,13 +356,19 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             .registerKotlinModule()
 //            .registerModule(JavaTimeModule())
             .registerModule(MrBeanModule())
+
+
+        private val availablePropertyTypes by lazy {
+            Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
+                .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
+                .toMap()
+        }
+
     }
 
-    fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
-    fun findPropertyTypes() = Reflections("com.dc2f").getTypesAnnotatedWith(PropertyType::class.java)
-        .mapNotNull { it.kotlin.findAnnotation<PropertyType>()?.identifier?.to(it.kotlin) }
-        .toMap()
+    fun findPropertyTypes() = availablePropertyTypes
 
+    fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
         logger.trace { "Loading childTypes for $propertyName of $klass." }
         val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
@@ -385,7 +396,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     fun <RET> load(dir: Path, process: (content: LoadedContent<T>, context: LoaderContext) -> RET): RET =
         LoaderContext(dir).use { context ->
             process(
-                context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root) }
+                context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root, null) }
                     .also { c ->
                         logger.debug { c.toStringReflective() }
                         context.lastVerifyDuration.measure {
@@ -396,9 +407,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             )
     }
 
-    private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath): LoadedContent<T> {
+    private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath, comment: String?): LoadedContent<T> {
         require(Files.isDirectory(dir))
-        val idxYml = dir.resolve("_index.yml")
+        val idxYml = dir.resolve(INDEX_YAML_NAME)
 
         val propertyTypes = findPropertyTypes()
 
@@ -438,7 +449,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                                 ContentDefMetadata(
                                     childPath,
                                     fsPath = child,
-                                    directChildren = emptyMap()
+                                    directChildren = emptyMap(),
+                                    comment = comment
                                 )
                             ).also(context::registerLoadedContent), isProperty)
                         } else {
@@ -453,7 +465,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }.let { type ->
                     @Suppress("UNCHECKED_CAST")
                     ContentLoader(type.kotlin as KClass<ContentDef>)
-                        ._load(context, child, contentPath.child(prefix + slug))
+                        ._load(context, child, contentPath.child(prefix + slug), comment)
                 }.let { ContentDefChild(propertyName, it, isProperty) }.also { context.registerLoadedContent(it.loadedContent) }
             }.filter { it != null }.toList().filterNotNull().groupBy { it.name }.toMutableMap()
         logger.info { "Children: $children -- ${ReflectionToStringBuilder.toString(children)}" }
@@ -527,7 +539,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 .toMap(),
             idxYml,
             directChildren = children,
-            contentDefClass = klass
+            contentDefClass = klass,
+            comment = comment
         )).also { context.registerLoadedContent(it) }.also {
             try {
                 validateContentDef(context, it, it.content)
@@ -539,7 +552,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     private fun<T: ContentDef> validateBeanIfRequired(context: LoaderContext, parent: LoadedContent<T>, content: Any?) {
         when (content) {
-            is ContentDef -> validateContentDef(context, parent, content)
+            is ObjectDef -> validateContentDef(context, parent, content)
             is Map<*, *> -> content.forEach { key, value ->
                 validateBeanIfRequired(context, parent, key)
                 validateBeanIfRequired(context, parent, value)
@@ -550,8 +563,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }
     }
 
-    private fun<T: ContentDef> validateContentDef(context: LoaderContext, parent: LoadedContent<T>, content: ContentDef) {
-        context.registerContentDef(parent, content)
+    private fun<T: ContentDef> validateContentDef(context: LoaderContext, parent: LoadedContent<T>, content: ObjectDef) {
+        context.registerObjectDef(parent, content)
             || return // if the content was already registered before, no need to check it again.
 
         content.javaClass.kotlin.memberProperties.forEach {

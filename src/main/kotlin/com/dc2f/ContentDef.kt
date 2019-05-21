@@ -26,7 +26,19 @@ annotation class Nestable(val identifier: String)
 @Target(AnnotationTarget.CLASS)
 annotation class PropertyType(val identifier: String)
 
-interface ContentDef
+interface ObjectDef
+
+/**
+ * Any structured data in dc2f which is constructed out of other primitives or ContentDefs
+ *
+ * ContentDefs can use the following types:
+ *
+ * * String
+ * * Boolean
+ * * int, float
+ * * ZonedDateTime
+ */
+interface ContentDef : ObjectDef
 
 interface Renderable : ContentDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
@@ -92,7 +104,7 @@ interface WithRedirect : WithUriReferencePathOverride {
 
     @JvmDefault
     override fun uriReferencePath(renderer: Renderer) =
-        redirect?.let { renderer.findUriReferencePath(it) }
+        redirect?.let { renderer.findUriReferencePath(it.referencedContent) }
 }
 
 interface ParsableContentDef: ContentDef {
@@ -109,7 +121,7 @@ interface Parsable<T : ParsableContentDef> {
 }
 
 // TODO: Maybe find a way to enforce the type of content which can be referenced?
-class ContentReference(private val contentPathValue: String) : ContentDef, ValidationRequired,
+class ContentReference(private val contentPathValue: String) : ObjectDef, ValidationRequired,
     WithRenderPathOverride {
 
 //    @JsonCreator
@@ -145,7 +157,7 @@ class ContentReference(private val contentPathValue: String) : ContentDef, Valid
 }
 
 
-open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, ValidationRequired {
+sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef, ValidationRequired {
 
     val name: String get() = fsPath.fileName.toString()
 
@@ -200,6 +212,8 @@ open class FileAsset(val file: ContentPath, val fsPath: Path) : ContentDef, Vali
     }
 }
 
+class FileAsset(file: ContentPath, fsPath: Path): BaseFileAsset(file, fsPath)
+
 enum class FillType {
     Fit,
     Cover,
@@ -241,7 +255,7 @@ class ResizedImage(
     val height: Int
 )
 
-open class ImageAsset(file: ContentPath, fsPath: Path) : FileAsset(file, fsPath) {
+class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) {
     val imageInfo: ImageInfo by lazy { parseImage() }
     val width by lazy { imageInfo.width }
     val height by lazy { imageInfo.height }

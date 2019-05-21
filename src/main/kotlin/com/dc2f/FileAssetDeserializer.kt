@@ -8,7 +8,7 @@ import java.nio.file.*
 
 private val logger = KotlinLogging.logger {}
 
-class FileAssetDeserializer<T : FileAsset>(vc: Class<T>, val producer: (path: ContentPath, fsPath: Path) -> T) : StdDeserializer<T>(vc) {
+class FileAssetDeserializer<T : BaseFileAsset>(vc: Class<T>, val producer: (path: ContentPath, fsPath: Path) -> T) : StdDeserializer<T>(vc) {
 
     override fun deserialize(p: JsonParser, ctxt: DeserializationContext): T {
         val value = _parseString(p, ctxt)
