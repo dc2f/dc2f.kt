@@ -37,6 +37,7 @@ interface ObjectDef
  * * Boolean
  * * int, float
  * * ZonedDateTime
+ * * subclasses of ObjectDef
  */
 interface ContentDef : ObjectDef
 
@@ -44,7 +45,7 @@ interface Renderable : ContentDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
 
-class Slug private constructor(private val value: String) : ContentDef, ValidationRequired {
+class Slug private constructor(private val value: String) : ObjectDef, ValidationRequired {
     val slug: String get() = value
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {

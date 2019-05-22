@@ -2,7 +2,7 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.git.CommitInfo
-import com.fasterxml.jackson.annotation.JacksonInject
+import com.fasterxml.jackson.annotation.*
 import com.redfin.sitemapgenerator.*
 import io.ktor.http.URLBuilder
 import java.nio.file.Path
@@ -12,6 +12,7 @@ interface WithSitemapInfo {
     @JvmDefault
     fun includeInSitemap() = true
 
+    @get:JsonIgnore
     @set:JacksonInject
     var commitInfo: CommitInfo?
 }

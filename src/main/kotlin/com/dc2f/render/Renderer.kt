@@ -2,6 +2,7 @@ package com.dc2f.render
 
 import com.dc2f.*
 import com.dc2f.util.*
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.ktor.http.*
 import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
@@ -43,8 +44,9 @@ class UriReferencePath private constructor(url: Url) :
 class UrlConfig(
     val protocol: String = "https",
     val host: String = "example.org"
-) {
+) : ContentDef {
 
+    @get:JsonIgnore
     val urlProtocol: URLProtocol by lazy {
         URLProtocol.createOrDefault(protocol)
     }
