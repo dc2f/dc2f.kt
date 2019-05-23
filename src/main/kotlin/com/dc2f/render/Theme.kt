@@ -324,7 +324,7 @@ class FileRenderContext<T: ContentDef>(
         val targetFsPath = rootPath.resolve(targetRenderPath.toString())
         if (!Files.exists(targetFsPath)) {
             Files.createDirectories(targetFsPath.parent)
-            Files.createLink(sourceFsPath, targetFsPath)
+            Files.createLink(targetFsPath, sourceFsPath)
 //            Files.copy(sourceFsPath, targetFsPath)
         }
     }
