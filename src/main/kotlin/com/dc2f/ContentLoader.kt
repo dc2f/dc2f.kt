@@ -118,13 +118,18 @@ open class AbstractPath<T: AbstractPath<T>>
 
     val isLeaf get() = !isRoot && !url.encodedPath.endsWith('/')
 
-    fun <OTHER: AbstractPath<OTHER>, T: AbstractPathCompanion<OTHER>> transform(otherCompanion: T) =
-        otherCompanion.construct(url)
+    fun <OTHER: AbstractPath<OTHER>, T: AbstractPathCompanion<OTHER>> transform(otherCompanion: T, construct: (url: Url) -> OTHER = otherCompanion.construct) =
+        construct(url)
 
     fun sibling(pathComponent: String) = parent().child(pathComponent)
 
     override fun toString(): String =
         url.encodedPath.trim('/')
+
+    /**
+     * Same as [toString], but will not remove trailing `/` for non-leaf links.
+     */
+    fun toStringExternal() : String = url.encodedPath.trimStart('/')
 
     override fun equals(other: Any?): Boolean {
         if (other is AbstractPath<*>) {
@@ -553,7 +558,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     private fun<T: ContentDef> validateBeanIfRequired(context: LoaderContext, parent: LoadedContent<T>, content: Any?) {
         when (content) {
             is ObjectDef -> validateContentDef(context, parent, content)
-            is Map<*, *> -> content.forEach { key, value ->
+            is Map<*, *> -> content.forEach { (key, value) ->
                 validateBeanIfRequired(context, parent, key)
                 validateBeanIfRequired(context, parent, value)
             }

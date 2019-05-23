@@ -90,7 +90,7 @@ class AssetPipeline(
 
     private val pipeline = mutableListOf<Transformer<TransformerValue>>()
 
-    fun href(outputDirectory: RenderPath): String = "/${runTransformations(outputDirectory)}"
+    fun href(outputDirectory: RenderPath, urlConfig: UrlConfig): String = UriReferencePath.fromRenderPath(runTransformations(outputDirectory), urlConfig).absoluteUrlWithoutHost()
 
     private fun runTransformations(outputDirectory: RenderPath): RenderPath {
         // check if we have cached something..
@@ -123,7 +123,7 @@ class AssetPipeline(
 //            return "/$outputPath"
 //        }
 
-        val renderPath = outputDirectory.child(value.fileName)
+        val renderPath = outputDirectory.childLeaf(value.fileName).asType(RenderPathType.StaticAsset)
         if (context is FileRenderContext) {
             val absFsPath = context.rootPath.resolve(renderPath.toString())
             val cachedFsPath = cachePath.resolve(value.cachedFileName)
@@ -132,6 +132,10 @@ class AssetPipeline(
                 Files.createDirectories(absFsPath.parent)
                 Files.createLink(absFsPath, cachedFsPath)
             }
+        } else {
+            val cachedFsPath = cachePath.resolve(value.cachedFileName)
+            context.storeInRenderPath(cachedFsPath, renderPath)
+            return renderPath
         }
 //        result.contentReader.copyTo(MoreFiles.asCharSink(absFsPath, Charsets.UTF_8))
 //        if (!Files.exists(absPath)) {
@@ -196,12 +200,12 @@ interface RenderContextData<T: ContentDef> {
     val rootNode get() = renderer.loaderContext.rootNode
 }
 
-interface RenderContext<T : ContentDef> : RenderContextData<T> {
+abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
 
-    val context: RenderContext<T> get() = this
+    open val context: RenderContext<T> get() = this
 
     //    fun render()
-    fun <U: ContentDef> createSubContext(
+    abstract fun <U: ContentDef> createSubContext(
         node: U,
         out: RenderOutput,
         enclosingNode: ContentDef?
@@ -260,6 +264,14 @@ interface RenderContext<T : ContentDef> : RenderContextData<T> {
         }
         return resource.toUri()
     }
+
+    fun storeInParentContent(sourceFsPath: Path, container: ContentDef, fileName: String): RenderPath {
+        val targetRenderPath = renderer.findRenderPath(container).childLeaf(fileName).asType(RenderPathType.StaticAsset)
+        storeInRenderPath(sourceFsPath, targetRenderPath)
+        return targetRenderPath
+    }
+
+    abstract fun storeInRenderPath(sourceFsPath: Path, targetRenderPath: RenderPath)
 }
 
 data class BaseRenderContextData<T : ContentDef>(
@@ -279,33 +291,43 @@ data class BaseRenderContextData<T : ContentDef>(
 
 }
 
-class BaseRenderContext<T: ContentDef>(val data: BaseRenderContextData<T>) : RenderContextData<T> by data, RenderContext<T> {
+class InMemoryRenderContext<T: ContentDef>(val data: BaseRenderContextData<T>, private val resourcesOutputPath: Path?) : RenderContextData<T> by data, RenderContext<T>() {
+
     val content get() = node
     override val context: RenderContext<T> get() = this
 
     @Suppress("UNCHECKED_CAST")
     override fun <U : ContentDef>createSubContext(node: U, out: RenderOutput, enclosingNode: ContentDef?) =
-        BaseRenderContext(data.createSubContextData(node = node, out = out, enclosingNode = enclosingNode))
+        InMemoryRenderContext(data.createSubContextData(node = node, out = out, enclosingNode = enclosingNode), resourcesOutputPath)
 
-
-    inline fun<reified U: T> nodeType(): RenderContext<U>? {
-        if (node is U) {
-            @Suppress("UNCHECKED_CAST")
-            return this as RenderContext<U>
+    override fun storeInRenderPath(sourceFsPath: Path, targetRenderPath: RenderPath) {
+//        logger.warn { "We are not rendering to files, so we can't resolve output path!" }
+        if (resourcesOutputPath != null) {
+            val targetFsPath = resourcesOutputPath.resolve(targetRenderPath.toString())
+            if (!Files.exists(targetFsPath)) {
+                Files.createDirectories(targetFsPath.parent)
+                Files.createLink(targetFsPath, sourceFsPath)
+//            Files.copy(sourceFsPath, targetFsPath)
+            }
         } else {
-            return null
+            logger.warn { "We are not rendering to files, so we can't resolve output path!" }
         }
-    }
-
-    inline fun <reified U: T, RET> ifType(block: RenderContext<U>.() -> RET): RET? {
-        return nodeType<U>()?.let(block)
     }
 }
 
 class FileRenderContext<T: ContentDef>(
     private val baseRenderContextData: BaseRenderContextData<T>,
     val rootPath: Path
-    ) : RenderContextData<T> by baseRenderContextData, RenderContext<T> {
+    ) : RenderContextData<T> by baseRenderContextData, RenderContext<T>() {
+
+    override fun storeInRenderPath(sourceFsPath: Path, targetRenderPath: RenderPath) {
+        val targetFsPath = rootPath.resolve(targetRenderPath.toString())
+        if (!Files.exists(targetFsPath)) {
+            Files.createDirectories(targetFsPath.parent)
+            Files.createLink(sourceFsPath, targetFsPath)
+//            Files.copy(sourceFsPath, targetFsPath)
+        }
+    }
 
     override fun <U : ContentDef> createSubContext(
         node: U,

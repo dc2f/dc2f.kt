@@ -4,7 +4,7 @@ import com.dc2f.*
 import com.dc2f.render.RenderContext
 import com.dc2f.util.toStringReflective
 
-interface RichText: ContentDef, Renderable {
+interface RichText: ContentDef, Renderable, ParsableContentDef {
     companion object {
         /**
          * Help method for rich text elements which might need to render resolved objects.

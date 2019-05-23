@@ -163,7 +163,7 @@ sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef,
     val name: String get() = fsPath.fileName.toString()
 
     @Transient
-    private lateinit var container: ContentDef
+    internal lateinit var container: ContentDef
     @JsonIgnore
     @Transient
     protected lateinit var loaderContext: LoaderContext
@@ -175,34 +175,9 @@ sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef,
         return null
     }
 
-    protected fun getTargetOutputPath(
-        context: FileRenderContext<*>,
-        fileName: String = name
-    ): Pair<RenderPath, Path> {
-        val containerPath = context.renderer.findRenderPath(container)
-        val renderPath = containerPath.childLeaf(fileName)
-
-        return renderPath to context.rootPath.resolve(renderPath.toString())
-    }
-
     fun href(context: RenderContext<*>, absoluteUri: Boolean = false): String {
-        val renderPath = if (context is FileRenderContext) {
-            val (renderPath, targetPath) = getTargetOutputPath(context)
-            Files.createDirectories(targetPath.parent)
-            if (!Files.exists(targetPath)) {
-                Files.copy(fsPath, targetPath)
-            }
-            renderPath
-        } else {
-            logger.warn { "We are not rendering to files, so we can't resolve output path!" }
-            context.renderer.findRenderPath(container)
-                .childLeaf(name)
-        }
-        val uriReferencePath = UriReferencePath.fromRenderPath(renderPath)
-        if (absoluteUri) {
-            return uriReferencePath.absoluteUrl(context.renderer.urlConfig)
-        }
-        return "/$uriReferencePath"
+        val renderPath = context.storeInParentContent(fsPath, container, name)
+        return context.renderer.href(renderPath, absoluteUri)
     }
 
     @Suppress("unused")
@@ -274,15 +249,15 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
         height: Int,
         fillType: FillType
     ): ResizedImage {
-        if (context !is FileRenderContext) {
-            logger.warn { "We are not rendering to file system. can't resize image." }
-            return ResizedImage("/unrendered/$width/$height", width, height)
-        }
+//        if (context !is FileRenderContext) {
+//            logger.warn { "We are not rendering to file system. can't resize image." }
+//            return ResizedImage("/unrendered/$width/$height", width, height)
+//        }
 
         val cachePath = cachePath(context.renderer.loaderContext)
-        val targetPathOrig = context.rootPath.resolve(file.toString())
-        val fileName = "${fillType}_${width}x${height}_${targetPathOrig.fileName}"
-        val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
+//        val targetPathOrig = context.rootPath.resolve(file.toString())
+        val fileName = "${fillType}_${width}x${height}_${file.name}"
+//        val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
 
         // FIXME: 1.) implement some way to clean up old resized images.
         //        2.) if because of some reason there is a cache entry, but no resized file, we have to resize it again.
@@ -299,7 +274,7 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
                 }
                 val thumbnailImage = thumbnails.asBufferedImage()
 
-                val cachedFileName = "${file.name}.${UUID.randomUUID()}.${targetPathOrig.fileName}"
+                val cachedFileName = "${file.name}.${UUID.randomUUID()}.${file.name}"
 
                 FileImageSink(cachePath.resolve(cachedFileName).toFile()).write(thumbnailImage)
 
@@ -307,24 +282,21 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
                     .also { imageCache().imageResizeCache.put(cacheKey, it) }
             }()
 
-        if (!Files.exists(targetPath)) {
-            Files.createDirectories(targetPath.parent)
-            Files.createLink(targetPath, cachePath.resolve(cachedData.cachedFileName))
-//            Files.copy(cachePath.resolve(cachedData.cachedFileName), targetPath)
-        }
-
-        doResize()
+        val renderPath = context.storeInParentContent(cachePath.resolve(cachedData.cachedFileName), container, fileName)
+//        if (!Files.exists(targetPath)) {
+//            Files.createDirectories(targetPath.parent)
+//            Files.createLink(targetPath, cachePath.resolve(cachedData.cachedFileName))
+////            Files.copy(cachePath.resolve(cachedData.cachedFileName), targetPath)
+//        }
 
 //        thumbnails.toFile(targetPath.toFile())
 //        thumbnails.addFilter()
         return ResizedImage(
-            "/$renderPath",
+            context.renderer.href(renderPath),
+//            "/$renderPath",
             cachedData.width,
             cachedData.height
         )
-    }
-
-    private fun doResize() {
     }
 
     private fun parseImage() =
