@@ -214,7 +214,7 @@ class Markdown(private val content: String) : ParsableContentDef, RichText, Vali
 
     private fun renderer(renderContext: RenderContext<*>?, loaderContext: LoaderContext, asInlineContent: Boolean = false) =
         HtmlRenderer.builder(
-            options
+            MutableDataSet(options)
                 .set(LOADER_CONTEXT, loaderContext)
                 .set(PARENT, renderContext?.node)
                 .set(RENDER_CONTEXT, renderContext)
@@ -255,7 +255,7 @@ class Markdown(private val content: String) : ParsableContentDef, RichText, Vali
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         return try {
             HtmlRenderer.builder(
-                options
+                MutableDataSet(options)
                     .set(LOADER_CONTEXT, loaderContext)
                     .set(PARENT, parent.content)
             ).build()

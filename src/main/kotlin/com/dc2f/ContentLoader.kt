@@ -237,6 +237,7 @@ data class LoaderContext(
     val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
     val registeredContent = mutableSetOf<ObjectDef>()
     private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
+    val metadata get() = metadataMap
     private val contentByFsPath = mutableMapOf<Path, ContentPath>()
     internal val lastLoadingDuration = Timing("loading")
     internal val lastVerifyDuration = Timing("verify")
@@ -295,6 +296,15 @@ data class LoaderContext(
     fun subPageDistance(parent: ContentDef, child: ContentDef): Int? =
         findContentPath(child).subPathDistance(findContentPath(parent))
 
+    fun reload(content: ContentDef) {
+        val metadata = requireNotNull(metadataMap[content])
+        @Suppress("UNCHECKED_CAST")
+        val loader = ContentLoader(metadata.contentDefClass as KClass<ContentDef>)
+        phase = LoaderPhase.Loading
+        val loadedContent = loader.reload(this, content, metadata)
+        val newMetadataMap = metadataMap + loadedContent.metadata.childrenMetadata + (loadedContent.content to loadedContent.metadata)
+        finishedLoadingStartValidate(newMetadataMap)
+    }
 
     override fun close() {
         cache.close()
@@ -411,6 +421,9 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 context
             )
     }
+
+    internal fun reload(context: LoaderContext, content: ContentDef, metadata: ContentDefMetadata) =
+        _load(context, requireNotNull(metadata.fsPath?.parent), metadata.path, null)
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath, comment: String?): LoadedContent<T> {
         require(Files.isDirectory(dir)) { "Not a valid directory: ${dir.toAbsolutePath()}" }
