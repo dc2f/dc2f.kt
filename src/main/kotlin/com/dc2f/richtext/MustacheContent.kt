@@ -18,7 +18,7 @@ class Mustache(
     val content: String,
     val path: Path,
     private val contentPath: ContentPath
-) : RichText, ParsableContentDef {
+) : RichText, ParsableObjectDef {
 
     companion object : Parsable<Mustache> {
 

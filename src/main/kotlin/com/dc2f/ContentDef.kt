@@ -41,7 +41,7 @@ interface ObjectDef
  */
 interface ContentDef : ObjectDef
 
-interface Renderable : ContentDef {
+interface Renderable : ObjectDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
 
@@ -108,12 +108,12 @@ interface WithRedirect : WithUriReferencePathOverride {
         redirect?.let { renderer.findUriReferencePath(it.referencedContent) }
 }
 
-interface ParsableContentDef: ContentDef {
+interface ParsableObjectDef: ObjectDef {
     /** raw unparsed content, which is used to persist this value */
     fun rawContent(): String
 }
 
-interface Parsable<T : ParsableContentDef> {
+interface Parsable<T : ParsableObjectDef> {
     fun parseContent(
         context: LoaderContext,
         file: Path,

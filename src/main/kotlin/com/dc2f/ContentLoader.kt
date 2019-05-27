@@ -1,7 +1,7 @@
 package com.dc2f
 
 import com.dc2f.git.*
-import com.dc2f.loader.TolerantZonedDateTime
+import com.dc2f.loader.*
 import com.dc2f.richtext.markdown.*
 import com.dc2f.util.*
 import com.fasterxml.jackson.annotation.*
@@ -31,7 +31,7 @@ val INDEX_YAML_NAME = "_index.yml"
 
 private val logger = KotlinLogging.logger {}
 
-data class LoadedContent<T : ContentDef>(
+data class LoadedContent<T : ObjectDef>(
     val context: LoaderContext,
     val content: T,
     val metadata: ContentDefMetadata
@@ -187,7 +187,7 @@ open class AbstractPath<T: AbstractPath<T>>
 open class ContentPath protected constructor(
     /// implementation detail: We use the ktor Url internally to handle resolving, etc.
     url: Url
-) : AbstractPath<ContentPath>(ContentPath.Companion, url) {
+) : AbstractPath<ContentPath>(Companion, url) {
 
     companion object : AbstractPathCompanion<ContentPath>() {
         override val construct = ::ContentPath
@@ -200,16 +200,20 @@ private val String.decodedPathComponents
 
 class ContentDefMetadata(
     val path: ContentPath,
-    val childrenMetadata: Map<ContentDef, ContentDefMetadata> = emptyMap(),
+    val childrenMetadata: Map<ObjectDef, ContentDefMetadata> = emptyMap(),
     // If the content is the root object of a file (_index.yml), this will contain the path to it.
     val fsPath: Path?,
-    val directChildren: Map<String, List<ContentDefChild>>,
+    val directChildren: Map<String, List<ContentDefChild<*>>>,
     val contentDefClass: KClass<out ContentDef>? = null,
     /**
      * The "comment" part of the file name, if any.
      */
     val comment: String?
-)
+) {
+    override fun toString(): String {
+        return "ContentDefMetadata(path=$path, childrenMetadata=$childrenMetadata, fsPath=$fsPath, directChildren=$directChildren, contentDefClass=$contentDefClass, comment=$comment)"
+    }
+}
 
 data class LoaderContext(
     val root: Path
@@ -236,11 +240,18 @@ data class LoaderContext(
     private val validatorsCollector: MutableList<(loaderContext: LoaderContext) -> String?> = mutableListOf()
     val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
     val registeredContent = mutableSetOf<ObjectDef>()
-    private lateinit var metadataMap: Map<ContentDef, ContentDefMetadata>
+    private lateinit var metadataMap: Map<ObjectDef, ContentDefMetadata>
     val metadata get() = metadataMap
     private val contentByFsPath = mutableMapOf<Path, ContentPath>()
     internal val lastLoadingDuration = Timing("loading")
     internal val lastVerifyDuration = Timing("verify")
+
+    val typeReflectionCache =
+        mutableMapOf<KClass<out ContentDef>, ContentDefReflection<out ContentDef>>()
+
+    fun <T : ContentDef> reflectionForType(clazz: KClass<out T>) =
+        typeReflectionCache.computeIfAbsent(clazz) { ContentDefReflection(it) }
+
 
     /** Only valid after loading is finished. */
     val rootNode get() = requireNotNull(contentByPath[ContentPath.root]) {
@@ -270,7 +281,7 @@ data class LoaderContext(
             true
         } else { false}
 
-    internal fun finishedLoadingStartValidate(metadataMap: Map<ContentDef, ContentDefMetadata>) {
+    internal fun finishedLoadingStartValidate(metadataMap: Map<ObjectDef, ContentDefMetadata>) {
         this.metadataMap = metadataMap
         phase = LoaderPhase.Validating
         validators.mapNotNull { it(this) }
@@ -282,7 +293,7 @@ data class LoaderContext(
         phase = LoaderPhase.Finished
     }
 
-    fun findContentPath(content: ContentDef) = run {
+    fun findContentPath(content: ObjectDef) = run {
         assert(phase.isAfter(LoaderPhase.Loading))
         // every content must be registered in the metadataMap
         requireNotNull(metadataMap[content]) {
@@ -323,9 +334,9 @@ data class ContentLoaderDeserializeContext(
         root.resolve(path.toString())
 }
 
-data class ContentDefChild(
+data class ContentDefChild<T: ObjectDef>(
     val name: String,
-    val loadedContent: LoadedContent<*>,
+    val loadedContent: LoadedContent<T>,
     val isProperty: Boolean
 )
 
@@ -383,31 +394,6 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     fun findPropertyTypes() = availablePropertyTypes
 
-    fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
-    private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
-        logger.trace { "Loading childTypes for $propertyName of $klass." }
-        val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
-            if ((member.returnType.classifier as? KClass<*>)?.isSubclassOf(Collection::class) == true) {
-                member.returnType.arguments[0].type
-            } else {
-                member.returnType
-            }
-        } ?: return null
-        logger.trace { "childTypes for $propertyName: typeArgument: {$typeArgument}" }
-        val childrenClass = (typeArgument.classifier as KClass<*>).java
-        return (setOf(childrenClass) + Reflections("app.anlage", "com.dc2f").getSubTypesOf(
-            childrenClass
-        )).mapNotNull { clazz ->
-            val nestable =
-                clazz.kotlin.findAnnotation<Nestable>()
-                    ?: clazz.kotlin.allSuperclasses.mapNotNull { it.findAnnotation<Nestable>() }
-                        .firstOrNull()
-            //                    val nestable = it.kotlin.findAnnotation<Nestable>()
-            logger.trace { "available class: $clazz --- $nestable" }
-            nestable?.identifier?.to(clazz)
-        }.toMap()
-    }
-
     fun <RET> load(dir: Path, process: (content: LoadedContent<T>, context: LoaderContext) -> RET): RET =
         LoaderContext(dir).use { context ->
             process(
@@ -430,6 +416,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         val idxYml = dir.resolve(INDEX_YAML_NAME)
 
         val propertyTypes = findPropertyTypes()
+        val reflection = context.reflectionForType(clazz = klass)
 
 //        klass.memberProperties.find { it.findAnnotation<JacksonInject>() }
 
@@ -470,7 +457,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                                     directChildren = emptyMap(),
                                     comment = comment
                                 )
-                            ).also(context::registerLoadedContent), isProperty)
+                            )/*.also(context::registerLoadedContent)*/, isProperty)
                         } else {
                             null
                         }
@@ -478,8 +465,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
 
                 requireNotNull(slug)
-                requireNotNull(childTypesForProperty(propertyName)?.get(typeIdentifier)) {
-                    "Unable to fetch type for $propertyName and $typeIdentifier for $child"
+                requireNotNull((reflection.property[propertyName] as? ContentDefPropertyReflectionNested)?.allowedTypesClasses?.get(typeIdentifier)) {
+                    "Unable to fetch type for $propertyName and $typeIdentifier for $child -- ${reflection.property[propertyName]}"
                 }.let { type ->
                     @Suppress("UNCHECKED_CAST")
                     ContentLoader(type.kotlin as KClass<ContentDef>)
@@ -561,7 +548,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             comment = comment
         )).also { context.registerLoadedContent(it) }.also {
             try {
-                validateContentDef(context, it, it.content)
+                validateContentDef(context, it, it.content, it.metadata)
             } catch (e: Throwable) {
                 throw IllegalArgumentException("Error while checking $contentPath: ${e.message}", e)
             }
@@ -570,7 +557,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     private fun<T: ContentDef> validateBeanIfRequired(context: LoaderContext, parent: LoadedContent<T>, content: Any?) {
         when (content) {
-            is ObjectDef -> validateContentDef(context, parent, content)
+            is ObjectDef -> validateContentDef(context, parent, content, parent.metadata.childrenMetadata[content])
             is Map<*, *> -> content.forEach { (key, value) ->
                 validateBeanIfRequired(context, parent, key)
                 validateBeanIfRequired(context, parent, value)
@@ -581,40 +568,62 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }
     }
 
-    private fun<T: ContentDef> validateContentDef(context: LoaderContext, parent: LoadedContent<T>, content: ObjectDef) {
+    private fun<T: ContentDef> validateContentDef(
+        context: LoaderContext,
+        parent: LoadedContent<T>,
+        content: ObjectDef,
+        metadata: ContentDefMetadata?
+    ) {
         context.registerObjectDef(parent, content)
             || return // if the content was already registered before, no need to check it again.
 
-        content.javaClass.kotlin.memberProperties.forEach {
-            if (it.returnType.isJavaType) {
-                return@forEach
-            }
-            if (it.isLateinit) {
-                logger.trace { "Ignoring lateinit property $it" }
-                return@forEach
-            }
-            if (!it.isAccessible) {
-//                logger.warn { "Can't access property $it" }
-                it.isAccessible = true
-//                return@forEach
-            }
-            if (it.getDelegate(content) != null) {
-                logger.trace { "Ignoring delegated property $it" }
-                return@forEach
-            }
-            try {
-                val x = it.get(content)
-                if (x == null) {
-                    if (!it.returnType.isMarkedNullable) {
-                        throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
-                    }
-                } else {
-                    validateBeanIfRequired(context, parent, x)
+        if (content !is ContentDef) {
+            return
+        }
+
+        @Suppress("USELESS_CAST")
+        val reflection = context.reflectionForType(metadata?.contentDefClass ?: (content as ContentDef)::class)
+
+        reflection.properties.forEach {
+            val value = it.getValue(content)
+            if (value == null) {
+                if (!it.optional) {
+                    throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
                 }
-            } catch (e: Throwable) {
-                throw ValidationException("Error while validating property $it: ${e.message}", e)
+            } else {
+                validateBeanIfRequired(context, parent, value)
             }
         }
+//        content.javaClass.kotlin.memberProperties.forEach {
+//            if (it.returnType.isJavaType) {
+//                return@forEach
+//            }
+//            if (it.isLateinit) {
+//                logger.trace { "Ignoring lateinit property $it" }
+//                return@forEach
+//            }
+//            if (!it.isAccessible) {
+////                logger.warn { "Can't access property $it" }
+//                it.isAccessible = true
+////                return@forEach
+//            }
+//            if (it.getDelegate(content) != null) {
+//                logger.trace { "Ignoring delegated property $it" }
+//                return@forEach
+//            }
+//            try {
+//                val x = it.get(content)
+//                if (x == null) {
+//                    if (!it.returnType.isMarkedNullable) {
+//                        throw IllegalArgumentException("Property ${it.name} is null (of ${content.javaClass.simpleName}).")
+//                    }
+//                } else {
+//                    validateBeanIfRequired(context, parent, x)
+//                }
+//            } catch (e: Throwable) {
+//                throw ValidationException("Error while validating property $it: ${e.message}", e)
+//            }
+//        }
     }
 }
 

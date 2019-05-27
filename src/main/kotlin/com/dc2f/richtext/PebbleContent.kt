@@ -48,7 +48,7 @@ class PebbleRenderExtension : AbstractExtension() {
 @PropertyType("peb")
 class Pebble(
     private val content: String
-) : RichText, ParsableContentDef, ValidationRequired {
+) : RichText, ParsableObjectDef, ValidationRequired {
 
 //    val path: Path,
 //    private val contentPath: ContentPath

@@ -41,7 +41,7 @@ typealias ValidationRequiredLambda = (context: LoaderContext) -> String
 
 val VALIDATORS = DataKey<MutableList<ValidationRequiredLambda>>("VALIDATORS") { mutableListOf() }
 val LOADER_CONTEXT = DataKey<LoaderContext>("LOADER_CONTEXT", null as LoaderContext?)
-val PARENT = DataKey<ContentDef?>("PARENT", null as ContentDef?)
+val PARENT = DataKey<ObjectDef?>("PARENT", null as ObjectDef?)
 val RENDER_CONTEXT = DataKey<RenderContext<*>>("RENDER_CONTEXT", null as RenderContext<*>?)
 
 class ValidationException(message: String, cause: Throwable? = null) : Exception(message, cause)
@@ -171,7 +171,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
 }
 
 @PropertyType("md")
-class Markdown(private val content: String) : ParsableContentDef, RichText, ValidationRequired {
+class Markdown(private val content: String) : ParsableObjectDef, RichText, ValidationRequired {
 
     companion object : Parsable<Markdown> {
         override fun parseContent(

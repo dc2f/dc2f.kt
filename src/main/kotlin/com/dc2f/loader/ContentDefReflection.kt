@@ -5,6 +5,7 @@ import com.dc2f.util.*
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.*
 import mu.KotlinLogging
+import org.reflections.Reflections
 import java.lang.reflect.Modifier
 import kotlin.reflect.*
 import kotlin.reflect.full.*
@@ -57,20 +58,23 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
     val properties by lazy {
         klass.memberProperties.filter { !it.returnType.isJavaType }
             .filter { prop ->
-                if (!prop.isLateinit) {
-                    prop.getter.findAnnotation<JsonIgnore>()?.value != true
-                } else {
+                // ignore lateinit properties.
+                if (prop.isLateinit) {
                     if (!prop.isTransient) {
                         throw IllegalArgumentException("a lateinit field must be marked as transient.")
                     }
-                    false
+                    return@filter false
                 }
+                if (prop.getter.findAnnotation<JsonIgnore>()?.value == true) {
+                    return@filter false
+                }
+                return@filter true
             }
             .map { prop ->
                 val elementJavaClass = prop.elementJavaClass
                 if (ContentDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
 //                    if (elementJavaClass.kotlin.companionObjectInstance is Parsable<*>) {
-                    if (ParsableContentDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
+                    if (ParsableObjectDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
                         require(!prop.isMultiValue) {
                             "MultiValue parsable values are not (yet) supported. $klass::${prop.name}"
                         }
@@ -88,13 +92,13 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
                             prop.name,
                             prop.returnType.isMarkedNullable,
                             prop.isMultiValue,
-                            (contentLoader.findChildTypesForProperty(prop.name)?.map { type ->
-                                type.key to type.value.name
+                            (findChildTypesForProperty(prop.name)?.map { type ->
+                                type.key to type.value
                             }?.toMap() ?: emptyMap()) +
                                 // TODO i don't think this is necessary actually?
                                 findPropertyTypesFor(
                                     elementJavaClass
-                                ).mapValues { it.value.java.name },
+                                ).mapValues { it.value.java },
                             elementJavaClass.name
                         )
                     }
@@ -148,6 +152,32 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
 
     private fun findPropertyTypesFor(clazz: Class<*>) =
         contentLoader.findPropertyTypes().filter { clazz.isAssignableFrom(it.value.java) }
+
+    private fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
+    private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
+        logger.trace { "Loading childTypes for $propertyName of $klass." }
+        val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->
+            if ((member.returnType.classifier as? KClass<*>)?.isSubclassOf(Collection::class) == true) {
+                member.returnType.arguments[0].type
+            } else {
+                member.returnType
+            }
+        } ?: return null
+        logger.trace { "childTypes for $propertyName: typeArgument: {$typeArgument}" }
+        val childrenClass = (typeArgument.classifier as KClass<*>).java
+        return (setOf(childrenClass) + Reflections("app.anlage", "com.dc2f").getSubTypesOf(
+            childrenClass
+        )).mapNotNull { clazz ->
+            val nestable =
+                clazz.kotlin.findAnnotation<Nestable>()
+                    ?: clazz.kotlin.allSuperclasses.mapNotNull { it.findAnnotation<Nestable>() }
+                        .firstOrNull()
+            //                    val nestable = it.kotlin.findAnnotation<Nestable>()
+            logger.trace { "available class: $clazz --- $nestable" }
+            nestable?.identifier?.to(clazz)
+        }.toMap()
+    }
+
 }
 
 @ApiDto
@@ -230,8 +260,11 @@ class ContentDefPropertyReflectionMap(
 
 class ContentDefPropertyReflectionNested(
     name: String, optional: Boolean, multiValue: Boolean,
-    val allowedTypes: Map<String, String>, val baseType: String
-) : ContentDefPropertyReflection(name, optional, multiValue)
+    @JsonIgnore
+    val allowedTypesClasses: Map<String, Class<*>>, val baseType: String
+) : ContentDefPropertyReflection(name, optional, multiValue) {
+    val allowedTypes = allowedTypesClasses.mapValues { it.value.name }
+}
 
 class ContentDefPropertyReflectionFileAsset(
     name: String, optional: Boolean, multiValue: Boolean,
