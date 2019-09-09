@@ -1,1 +1,2 @@
+github-actions-ci@codeux.design
 herbert@poul.at
