@@ -28,3 +28,4 @@
 /.blackbox/pubring.gpg~
 /.blackbox/pubring.kbx~
 /.blackbox/secring.gpg
+/_tools/secrets/build_secrets.gradle.kts
