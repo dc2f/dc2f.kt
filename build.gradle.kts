@@ -1,14 +1,23 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
+
 val jacksonVersion = "2.9.9"
 
 group = "com.dc2f"
-version = "0.1.1-SNAPSHOT"
+version = "0.1.2"
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
     id("org.jetbrains.kotlin.jvm").version("1.3.10")
     `maven-publish`
+    signing
+}
+
+val secretConfig = file("_tools/secrets/build_secrets.gradle.kts")
+if (secretConfig.exists()) {
+    apply { from("_tools/secrets/build_secrets.gradle.kts") }
+} else {
+    println("Warning: Secrets do not exist, maven publish will not be possible.")
 }
 
 tasks.register<Jar>("sourcesJar") {
@@ -20,25 +29,69 @@ tasks.register<Jar>("javadocJar") {
     archiveClassifier.set("javadoc")
 }
 
-
 publishing {
     publications {
-        create<MavenPublication>("githubJava") {
+        create<MavenPublication>("mavenCentralJava") {
             from(components["java"])
             artifact(tasks["sourcesJar"])
             artifact(tasks["javadocJar"])
+
+
+            pom {
+                name.set("DC2F")
+                description.set("Type safe static website generator")
+                url.set("https://github.com/dc2f/dc2f.kt")
+//                properties.set(mapOf(
+//                    "myProp" to "value",
+//                    "prop.with.dots" to "anotherValue"
+//                ))
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("hpoul")
+                        name.set("Herbert Poul")
+                        email.set("herbert@poul.at")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:http://github.com/dc2f/dc2f.kt.git")
+                    developerConnection.set("scm:git:ssh://github.com/dc2f/dc2f.kt.git")
+                    url.set("https://github.com/dc2f/dc2f.kt")
+                }
+            }
+
         }
     }
     repositories {
         maven {
-            name = "github"
-            url = uri("https://maven.pkg.github.com/dc2f")
+            val releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
+            val snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            println("using $url")
             credentials {
-                username = project.properties["dc2f.github.username"] as? String
-                password = project.properties["dc2f.github.password"] as? String
+                username = project.properties["ossrhUsername"] as? String
+                password = project.properties["ossrhPassword"] as? String
             }
+
         }
+//        maven {
+//            name = "github"
+//            url = uri("https://maven.pkg.github.com/dc2f")
+//            credentials {
+//                username = project.properties["dc2f.github.username"] as? String
+//                password = project.properties["dc2f.github.password"] as? String
+//            }
+//        }
     }
+}
+
+signing {
+    sign(publishing.publications["mavenCentralJava"])
 }
 
 tasks.withType<KotlinCompile> {
