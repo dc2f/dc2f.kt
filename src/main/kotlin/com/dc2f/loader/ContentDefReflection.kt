@@ -59,6 +59,9 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
     val properties by lazy {
         klass.memberProperties.filter { !it.returnType.isJavaType }
             .filter { prop ->
+                if (!prop.isOpen && !prop.isAbstract) {
+                    logger.error { "property must be open: $prop ${prop.isAbstract}" }
+                }
                 // ignore lateinit properties.
                 if (prop.isLateinit) {
                     if (!prop.isTransient) {

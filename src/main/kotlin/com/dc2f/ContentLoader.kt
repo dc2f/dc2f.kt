@@ -272,7 +272,7 @@ data class LoaderContext(
     fun <T: ContentDef> registerObjectDef(parent: LoadedContent<T>, content: ObjectDef) =
         if (registeredContent.add(content)) {
             if (parent.metadata.fsPath != null) {
-                logger.debug { "putting fs path ${parent.metadata.fsPath.toAbsolutePath()}"}
+                logger.trace { "putting fs path ${parent.metadata.fsPath.toAbsolutePath()}"}
                 contentByFsPath.putIfAbsent(parent.metadata.fsPath.toAbsolutePath(), parent.metadata.path)
             }
             if (content is ValidationRequired) {
@@ -401,7 +401,6 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             process(
                 context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root, null) }
                     .also { c ->
-                        logger.debug { c.toStringReflective() }
                         context.lastVerifyDuration.measure {
                             c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
                         }
@@ -479,7 +478,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                         ._load(context, child, contentPath.child(prefix + slug), comment)
                 }.let { ContentDefChild(propertyName, it, isProperty) }.also { context.registerLoadedContent(it.loadedContent) }
             }.filter { it != null }.toList().filterNotNull().groupBy { it.name }.toMutableMap()
-        logger.info { "Children: $children -- ${ReflectionToStringBuilder.toString(children)}" }
+        logger.trace { "Children: $children" }
 
         val injectableValues = object : InjectableValues() {
             override fun findInjectableValue(
@@ -497,7 +496,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
 //                if (valueId is Children) {
                 require(valueId is String)
-                logger.debug {
+                logger.trace {
                     "Need to inject ${ReflectionToStringBuilder.toString(
                         Optional.ofNullable(
                             valueId
@@ -506,7 +505,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 }
                 val isListProperty = (forProperty?.member as? AnnotatedMethod)?.getParameterType(0)?.isTypeOrSuperTypeOf(List::class.java) == true
                 return children[valueId]?.let { child ->
-                    logger.debug("   injecting children: $child.")
+                    logger.trace("   injecting children: $child.")
                     @Suppress("IMPLICIT_CAST_TO_ANY")
                     if (isListProperty) {
                         child.map { it.loadedContent.content }
@@ -529,7 +528,6 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
             "{}".toByteArray()
         }
         val tree = objectMapper.readTree(fileContent)
-        logger.info { "tree: $tree" }
 
         val obj = try {
             objectMapper.reader(injectableValues)
@@ -552,7 +550,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 @Suppress("UNCHECKED_CAST")
                 if (method?.name == "replace") {
                     require(args != null)
-                    logger.debug { "Replacing targetObject." }
+                    logger.trace { "Replacing targetObject." }
                     targetObject = args[0] as T
                     return null
                 }
