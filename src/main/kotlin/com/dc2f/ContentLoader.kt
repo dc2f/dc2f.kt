@@ -271,6 +271,7 @@ data class LoaderContext(
     fun <T: ContentDef> registerObjectDef(parent: LoadedContent<T>, content: ObjectDef) =
         if (registeredContent.add(content)) {
             if (parent.metadata.fsPath != null) {
+                logger.debug { "putting fs path ${parent.metadata.fsPath.toAbsolutePath()}"}
                 contentByFsPath.putIfAbsent(parent.metadata.fsPath.toAbsolutePath(), parent.metadata.path)
             }
             if (content is ValidationRequired) {

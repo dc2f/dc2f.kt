@@ -41,6 +41,12 @@ interface ObjectDef
  */
 interface ContentDef : ObjectDef
 
+/**
+ * Marker interface for [ContentDef] objects which are preferable nested in their own
+ * directories.
+ */
+interface ContentDefNested : ContentDef
+
 interface Renderable : ObjectDef {
     fun renderContent(renderContext: RenderContext<*>, arguments: Any? = null): String
 }
