@@ -137,6 +137,8 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-mrbean:$jacksonVersion")
 
+    implementation("cglib:cglib:3.2.12")
+
 //    compile("org.hibernate.validator:hibernate-validator:6.0.14.Final")
 //    implementation("org.glassfish:javax.el:3.0.1-b09")
 

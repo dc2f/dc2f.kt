@@ -17,7 +17,8 @@ private val logger = KotlinLogging.logger {}
 class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
 
     @Suppress("unused")
-    val type get() = klass.qualifiedName
+    val type
+        get() = klass.qualifiedName
 
     @Suppress("unused")
     val typeIdentifier: String? by lazy {
@@ -72,36 +73,35 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
             }
             .map { prop ->
                 val elementJavaClass = prop.elementJavaClass
-                if (ContentDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
-//                    if (elementJavaClass.kotlin.companionObjectInstance is Parsable<*>) {
-                    if (ParsableObjectDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
-                        require(!prop.isMultiValue) {
-                            "MultiValue parsable values are not (yet) supported. $klass::${prop.name}"
-                        }
-                        val propertyTypes = findPropertyTypesFor(elementJavaClass)
-                        ContentDefPropertyReflectionParsable(
-                            prop.name,
-                            prop.returnType.isMarkedNullable,
-                            prop.isMultiValue,
-                            propertyTypes.keys.joinToString(","),
-                            propertyTypes
-                        )
-                    } else {
-                        elementJavaClass.kotlin.isAbstract
-                        ContentDefPropertyReflectionNested(
-                            prop.name,
-                            prop.returnType.isMarkedNullable,
-                            prop.isMultiValue,
-                            (findChildTypesForProperty(prop.name)?.map { type ->
-                                type.key to type.value
-                            }?.toMap() ?: emptyMap()) +
-                                // TODO i don't think this is necessary actually?
-                                findPropertyTypesFor(
-                                    elementJavaClass
-                                ).mapValues { it.value.java },
-                            elementJavaClass.name
-                        )
+                if (ParsableObjectDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
+                    require(!prop.isMultiValue) {
+                        "MultiValue parsable values are not (yet) supported. $klass::${prop.name}"
                     }
+                    val propertyTypes = findPropertyTypesFor(elementJavaClass)
+                    ContentDefPropertyReflectionParsable(
+                        prop.name,
+                        prop.returnType.isMarkedNullable,
+                        prop.isMultiValue,
+                        propertyTypes.keys.joinToString(","),
+                        propertyTypes
+                    )
+                } else if (ContentDef::class.java.isAssignableFrom(prop.elementJavaClass)) {
+//                    if (elementJavaClass.kotlin.companionObjectInstance is Parsable<*>) {
+
+                    elementJavaClass.kotlin.isAbstract
+                    ContentDefPropertyReflectionNested(
+                        prop.name,
+                        prop.returnType.isMarkedNullable,
+                        prop.isMultiValue,
+                        (findChildTypesForProperty(prop.name)?.map { type ->
+                            type.key to type.value
+                        }?.toMap() ?: emptyMap()) +
+                            // TODO i don't think this is necessary actually?
+                            findPropertyTypesFor(
+                                elementJavaClass
+                            ).mapValues { it.value.java },
+                        elementJavaClass.name
+                    )
                 } else if (Map::class.java.isAssignableFrom(elementJavaClass)) {
                     ContentDefPropertyReflectionMap(
                         prop.name,
@@ -153,7 +153,9 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
     private fun findPropertyTypesFor(clazz: Class<*>) =
         contentLoader.findPropertyTypes().filter { clazz.isAssignableFrom(it.value.java) }
 
-    private fun findChildTypesForProperty(propertyName: String) = childTypesForProperty(propertyName)
+    private fun findChildTypesForProperty(propertyName: String) =
+        childTypesForProperty(propertyName)
+
     private fun childTypesForProperty(propertyName: String): Map<String, Class<out Any>>? {
         logger.trace { "Loading childTypes for $propertyName of $klass." }
         val typeArgument = klass.members.find { it.name == propertyName }?.let { member ->

@@ -15,9 +15,10 @@ import com.fasterxml.jackson.module.mrbean.MrBeanModule
 import io.ktor.http.*
 import kotlinx.io.core.Closeable
 import mu.KotlinLogging
+import net.sf.cglib.proxy.*
 import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
-import java.lang.reflect.Method
+import java.lang.reflect.*
 import java.nio.file.*
 import java.time.ZonedDateTime
 import java.util.*
@@ -410,7 +411,11 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     }
 
     internal fun reload(context: LoaderContext, content: ContentDef, metadata: ContentDefMetadata) =
-        _load(context, requireNotNull(metadata.fsPath?.parent), metadata.path, null)
+        _load(context, requireNotNull(metadata.fsPath?.parent), metadata.path, null).also {
+            if (content is ProxyObjectDef) {
+                content.replace(it.content)
+            }
+        }
 
     private fun _load(context: LoaderContext, dir: Path, contentPath: ContentPath, comment: String?): LoadedContent<T> {
         require(Files.isDirectory(dir)) { "Not a valid directory: ${dir.toAbsolutePath()}" }
@@ -533,7 +538,35 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         } catch (e: Throwable) {
             throw Exception("Error while parsing $idxYml: ${e.message}", e)
         }
-        return LoadedContent(context, obj, ContentDefMetadata(
+        val enhancer = Enhancer()
+        enhancer.setSuperclass(obj.javaClass)
+        enhancer.setInterfaces(arrayOf(ProxyObjectDef::class.java))
+        enhancer.setCallback(object : MethodInterceptor {
+            var targetObject = obj
+            override fun intercept(
+                tmpObj: Any?,
+                method: Method?,
+                args: Array<out Any>?,
+                proxy: MethodProxy?
+            ): Any? {
+                @Suppress("UNCHECKED_CAST")
+                if (method?.name == "replace") {
+                    require(args != null)
+                    logger.debug { "Replacing targetObject." }
+                    targetObject = args[0] as T
+                    return null
+                }
+                if (proxy == null) {
+                    logger.warn { "invoked with null proxy? weird. $method" }
+                    return null
+                }
+                return proxy.invoke(targetObject, args)
+            }
+
+        })
+        @Suppress("UNCHECKED_CAST") val objProxy = enhancer.create() as T
+//        Proxy.newProxyInstance(obj.javaClass.classLoader, arrayOf(obj.javaClass), )
+        return LoadedContent(context, objProxy, ContentDefMetadata(
             contentPath,
             children.values
                 .flatten()
@@ -626,6 +659,10 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 //            }
 //        }
     }
+}
+
+interface ProxyObjectDef {
+    fun replace(with: ObjectDef)
 }
 
 fun <K, V> Iterable<Map.Entry<K, V>>.toPairs() = map { it.toPair() }
