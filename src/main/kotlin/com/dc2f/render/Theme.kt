@@ -52,7 +52,7 @@ abstract class Theme {
     internal fun <T: ContentDef> findRenderer(node: T, forOutputType: OutputType): ThemeConfig.RenderConfig<*> =
         // for now we don't support having more than one renderer for each type.
         requireNotNull(config.renderers[forOutputType]) { "Output Type has no configured renderers $forOutputType" }
-            .first { it.canRender(node) }
+            .firstOrNull { it.canRender(node) } ?: throw Exception("Unable to find a suitable renderer for $node")
 
     /**
      * Provide a "title" for links to this content.

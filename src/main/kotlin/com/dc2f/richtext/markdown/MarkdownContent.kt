@@ -159,7 +159,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
             NodeRenderingHandler<Macro>(Macro::class.java, ::render),
             NodeRenderingHandler<MacroBlock>(MacroBlock::class.java) { param: MacroBlock, nodeRendererContext: NodeRendererContext, htmlWriter: HtmlWriter ->
                 if (!param.isClosedTag) {
-                    throw IllegalArgumentException("Tag must be cloesd. Got: ${param.chars}")
+                    throw IllegalArgumentException("Tag must be closed. Got: ${param.chars}")
                 }
                 if (!param.macroContentChars.isNullOrBlank()) {
                     throw IllegalArgumentException("Tag content must be empty, because it is ignored. contains: ${param.chars}")
