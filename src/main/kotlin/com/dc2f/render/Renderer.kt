@@ -42,7 +42,7 @@ class UriReferencePath private constructor(url: Url, private val urlConfig: UrlC
             renderPath.transform(this) {
                 when (renderPath.type) {
                     RenderPathType.Content -> UriReferencePath(it.copy(encodedPath = urlConfig.pathPrefix + it.encodedPath), urlConfig)
-                    RenderPathType.StaticAsset -> UriReferencePath(it.copy(encodedPath = urlConfig.staticFilesPrefix + it.encodedPath), urlConfig)
+                    RenderPathType.StaticAsset -> UriReferencePath(it.copy(encodedPath = urlConfig.staticFilesPrefixWithoutTrailingSlash + it.encodedPath), urlConfig)
                 }
             }
 
@@ -68,7 +68,7 @@ open class UrlConfig(
     val protocol: String = "https",
     val host: String = "example.org",
     /**
-     * Optionally a path prefix wich is used to prefix all urls.
+     * Optionally a path prefix which is used to prefix all urls.
      * If defined, must not begin with /, but must end with '/'
      * e.g. `example/`
      */
@@ -77,6 +77,8 @@ open class UrlConfig(
 
     @get:JsonIgnore
     open val staticFilesPrefix get() = pathPrefix
+
+    open val staticFilesPrefixWithoutTrailingSlash get() = staticFilesPrefix.trimEnd('/')
 
     @get:JsonIgnore
     val urlProtocol: URLProtocol by lazy {

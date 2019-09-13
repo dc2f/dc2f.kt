@@ -399,14 +399,22 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
     fun <RET> load(dir: Path, process: (content: LoadedContent<T>, context: LoaderContext) -> RET): RET =
         LoaderContext(dir).use { context ->
             process(
-                context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root, null) }
-                    .also { c ->
-                        context.lastVerifyDuration.measure {
-                            c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
-                        }
-                    },
+                load(context, dir),
                 context
             )
+        }
+
+    private fun load(context: LoaderContext, dir: Path): LoadedContent<T> =
+        context.lastLoadingDuration.measure { _load(context, dir, ContentPath.root, null) }
+            .also { c ->
+                context.lastVerifyDuration.measure {
+                    c.context.finishedLoadingStartValidate(c.metadata.childrenMetadata + (c.content to c.metadata))
+                }
+            }
+
+    fun loadWithoutClose(dir: Path): Pair<LoadedContent<T>, LoaderContext> {
+        val context = LoaderContext(dir)
+        return load(context, dir) to context
     }
 
     internal fun reload(context: LoaderContext, content: ContentDef, metadata: ContentDefMetadata) =
@@ -550,7 +558,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 @Suppress("UNCHECKED_CAST")
                 if (method?.name == "replace") {
                     require(args != null)
-                    logger.trace { "Replacing targetObject." }
+                    logger.debug { "Replacing targetObject." }
                     targetObject = args[0] as T
                     return null
                 }
