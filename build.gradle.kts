@@ -4,7 +4,9 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 val jacksonVersion = "2.9.9"
 
 group = "com.dc2f"
-version = "0.1.3-SNAPSHOT"
+if (version == "unspecified") {
+    version = "0.1.3-SNAPSHOT"
+}
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
