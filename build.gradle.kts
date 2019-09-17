@@ -24,10 +24,6 @@ tasks.register<Jar>("sourcesJar") {
     from(sourceSets.main.get().allSource)
     archiveClassifier.set("sources")
 }
-//val sourcesJar by tasks.registering(Jar::class) {
-//    archiveClassifier.set("sources")
-//    from(sourceSets.main.get().allSource)
-//}
 tasks.register<Jar>("javadocJar") {
     from(tasks.javadoc)
     archiveClassifier.set("javadoc")
