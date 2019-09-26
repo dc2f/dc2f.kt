@@ -41,7 +41,7 @@ class UriReferencePath private constructor(url: Url, private val urlConfig: UrlC
         fun fromRenderPath(renderPath: RenderPath, urlConfig: UrlConfig) =
             renderPath.transform(this) {
                 when (renderPath.type) {
-                    RenderPathType.Content -> UriReferencePath(it.copy(encodedPath = urlConfig.pathPrefix + it.encodedPath), urlConfig)
+                    RenderPathType.Content -> UriReferencePath(it.copy(encodedPath = urlConfig.pathPrefixWithoutTrailingSlash + it.encodedPath), urlConfig)
                     RenderPathType.StaticAsset -> UriReferencePath(it.copy(encodedPath = urlConfig.staticFilesPrefixWithoutTrailingSlash + it.encodedPath), urlConfig)
                 }
             }
@@ -76,8 +76,12 @@ open class UrlConfig(
 ) : ContentDef {
 
     @get:JsonIgnore
+    open val pathPrefixWithoutTrailingSlash get() = pathPrefix.trimEnd('/')
+
+    @get:JsonIgnore
     open val staticFilesPrefix get() = pathPrefix
 
+    @get:JsonIgnore
     open val staticFilesPrefixWithoutTrailingSlash get() = staticFilesPrefix.trimEnd('/')
 
     @get:JsonIgnore

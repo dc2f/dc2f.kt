@@ -227,7 +227,9 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
 
     fun<U: ContentDef> renderChildren(children: List<U>) {
         children.map { child ->
-            val metadata = requireNotNull(metadata.childrenMetadata[child]) { "Unknown child? ${child}" }
+            val metadata = requireNotNull(metadata.childrenMetadata[child] ?: renderer.loaderContext.metadata[child]) {
+                "Unknown child? $child"
+            }
             renderer.renderContent(child, metadata, this, forOutputType)
         }
     }

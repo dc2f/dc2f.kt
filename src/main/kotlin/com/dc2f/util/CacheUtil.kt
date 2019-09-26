@@ -22,24 +22,20 @@ class AppService: Service {
 
     override fun stop() {
     }
-
 }
 
 class CacheUtil : Closeable {
-
     private val dummy = AppService()
 
     val cacheDirectory by lazy {
         File(".dc2f", "cache")
     }
 
-    val cacheManager by lazy {
-
+    val cacheManager : PersistentCacheManager =
         CacheManagerBuilder.newCacheManagerBuilder()
             .using(dummy)
-            .with(CacheManagerBuilder.persistence(File(".dc2f", "cache")))
+            .with(CacheManagerBuilder.persistence(cacheDirectory))
             .build(true)
-    }
 
     val stats get() = dummy.stats
 
@@ -68,9 +64,9 @@ class CacheUtil : Closeable {
     }
 
     override fun close() {
-        if (this::cacheManager.isLazyInitialized) {
+//        if (this::cacheManager.isLazyInitialized) {
             cacheManager.close()
-        }
+//        }
     }
 }
 
