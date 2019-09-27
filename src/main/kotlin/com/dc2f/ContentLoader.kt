@@ -2,9 +2,9 @@ package com.dc2f
 
 import com.dc2f.git.*
 import com.dc2f.loader.*
-import com.dc2f.richtext.markdown.*
+import com.dc2f.richtext.markdown.ValidationRequired
 import com.dc2f.util.*
-import com.fasterxml.jackson.annotation.*
+import com.fasterxml.jackson.annotation.JacksonInject
 import com.fasterxml.jackson.core.Version
 import com.fasterxml.jackson.databind.*
 import com.fasterxml.jackson.databind.introspect.*
@@ -18,13 +18,13 @@ import mu.KotlinLogging
 import net.sf.cglib.proxy.*
 import org.apache.commons.lang3.builder.*
 import org.reflections.Reflections
-import java.lang.reflect.*
+import java.lang.reflect.Method
 import java.nio.file.*
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.reflect.KClass
 import kotlin.reflect.full.*
-import kotlin.reflect.jvm.*
+import kotlin.reflect.jvm.javaSetter
 import kotlin.streams.toList
 
 val PROPERTY_CHILDREN = ContentBranchDef<*>::children.name
@@ -565,6 +565,12 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 if (proxy == null) {
                     logger.warn { "invoked with null proxy? weird. $method" }
                     return null
+                }
+                if (method?.name == "equals") {
+                    val other = args?.first()
+                    if (tmpObj === other || targetObject === other) {
+                        return true
+                    }
                 }
                 return proxy.invoke(targetObject, args)
             }
