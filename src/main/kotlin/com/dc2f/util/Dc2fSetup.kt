@@ -51,7 +51,7 @@ open class Dc2fConfig<ROOT_CONTENT : com.dc2f.Website<*>>(
     val contentDirectory: String,
     val staticDirectory: String,
     val rootContentType: KClass<ROOT_CONTENT>,
-    val urlConfigFromRootContent : (rootConfig: ROOT_CONTENT) -> UrlConfig,
+    val urlConfigFromRootContent: (rootConfig: ROOT_CONTENT) -> UrlConfig,
     val theme: Theme
 ) {
     fun <T> loadWebsite(
@@ -83,6 +83,11 @@ open class Dc2fConfig<ROOT_CONTENT : com.dc2f.Website<*>>(
                 urlConfigFromRootContent(loadedWebsite.content)
             )
                 .render()
+            AllSitesJsonGenerator(
+                targetPath.resolve("allsites.json"),
+                loadedWebsite.context,
+                renderer
+            ).render()
             if (cb != null) {
                 cb(renderer)
             }
