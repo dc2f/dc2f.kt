@@ -65,14 +65,14 @@ class UriReferencePath private constructor(url: Url, private val urlConfig: UrlC
 }
 
 open class UrlConfig(
-    val protocol: String = "https",
-    val host: String = "example.org",
+    open val protocol: String = "https",
+    open val host: String = "example.org",
     /**
      * Optionally a path prefix which is used to prefix all urls.
      * If defined, must not begin with /, but must end with '/'
      * e.g. `example/`
      */
-    val pathPrefix: String = ""
+    open val pathPrefix: String = ""
 ) : ContentDef {
 
     @get:JsonIgnore
@@ -85,7 +85,7 @@ open class UrlConfig(
     open val staticFilesPrefixWithoutTrailingSlash get() = staticFilesPrefix.trimEnd('/')
 
     @get:JsonIgnore
-    val urlProtocol: URLProtocol by lazy {
+    open val urlProtocol: URLProtocol by lazy {
         URLProtocol.createOrDefault(protocol)
     }
 }

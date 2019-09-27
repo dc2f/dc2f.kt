@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.introspect.*
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.fasterxml.jackson.module.mrbean.MrBeanModule
+import com.fasterxml.jackson.module.mrbean.*
 import io.ktor.http.*
 import kotlinx.io.core.Closeable
 import mu.KotlinLogging
@@ -346,6 +346,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     companion object {
 
+        private const val GENERATED_CLASSES_PACKAGE_NAME = AbstractTypeMaterializer.DEFAULT_PACKAGE_FOR_GENERATED
+
         val objectMapper = ObjectMapper(YAMLFactory())
             .configure(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES, true)
             .registerModule(object : SimpleModule() {
@@ -392,6 +394,21 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                 .toMap()
         }
 
+        fun actualClassForDeserializedContentDef(obj: ContentDef) : KClass<out ContentDef> {
+            if (obj::class.qualifiedName?.startsWith(GENERATED_CLASSES_PACKAGE_NAME) == true) {
+                val superclasses = obj::class.superclasses.filterNot { it == Any::class }
+                if (superclasses.size > 1) {
+                    logger.error { "More than one superclass for {$obj} ({${obj::class.qualifiedName}})? $superclasses" }
+                }
+                val actualClass = superclasses.single()
+                if (!actualClass.isSubclassOf(ContentDef::class)) {
+                    throw IllegalArgumentException("Materialized class can only be a subclass of ContentDef.")
+                }
+                @Suppress("UNCHECKED_CAST")
+                return actualClass as KClass<ContentDef>
+            }
+            return obj::class
+        }
     }
 
     fun findPropertyTypes() = availablePropertyTypes
@@ -561,6 +578,8 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
                     logger.debug { "Replacing targetObject." }
                     targetObject = args[0] as T
                     return null
+                } else if (method?.name == "dc2fGetTargetObject") {
+                    return targetObject
                 }
                 if (proxy == null) {
                     logger.warn { "invoked with null proxy? weird. $method" }
@@ -628,7 +647,11 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         }
 
         @Suppress("USELESS_CAST")
-        val reflection = context.reflectionForType(metadata?.contentDefClass ?: (content as ContentDef)::class)
+        val reflection = context.reflectionForType(
+            metadata?.contentDefClass
+                ?: actualClassForDeserializedContentDef(content as ContentDef)
+                ?: (content as ContentDef)::class
+        )
 
         reflection.properties.forEach {
             val value = it.getValue(content)
@@ -675,6 +698,7 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
 interface ProxyObjectDef {
     fun replace(with: ObjectDef)
+    fun dc2fGetTargetObject(): ObjectDef
 }
 
 fun <K, V> Iterable<Map.Entry<K, V>>.toPairs() = map { it.toPair() }
