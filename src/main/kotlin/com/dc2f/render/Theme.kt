@@ -43,6 +43,8 @@ abstract class Theme {
     val config: ThemeConfig = ThemeConfig()
 
     init {
+        // TODO maybe we should change how configure is called?
+        @Suppress("LeakingThis")
         configure(config)
     }
 
@@ -242,9 +244,13 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
 
     fun getAsset(path: String): AssetPipeline {
         // TODO add caching
-        val resource =
-            theme.javaClass.classLoader.getResource(path)?.toURI()
-                ?: getResourceFromFileSystem(path)
+
+        // for now we always load from the file system, mainly because it is easier for reloading..
+        // (and scss transform from classpath is not supported anyway).
+//        val resource =
+//            theme.javaClass.classLoader.getResource(path)?.toURI()
+//                ?: getResourceFromFileSystem(path)
+        val resource = getResourceFromFileSystem(path)
         val size = try { File(resource).length() } catch (e: IllegalArgumentException) { -1L }
         @Suppress("UnstableApiUsage")
         return AssetPipeline(

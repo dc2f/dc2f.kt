@@ -4,8 +4,11 @@ import com.dc2f.render.RenderCharAsset
 import com.google.common.hash.Hashing
 import com.google.common.io.CharSource
 import io.bit3.jsass.*
+import io.bit3.jsass.importer.*
 import mu.KotlinLogging
 import java.io.*
+import java.net.URI
+import java.nio.file.*
 import java.util.*
 
 private val logger = KotlinLogging.logger {}
@@ -47,8 +50,10 @@ class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTrans
 
 }
 
-class ScssTransformer(val includePaths: List<File> = emptyList(),
-                      override val cacheKey: TransformerCacheKey = StringTransformerCacheKey(includePaths.hashCode().toString())
+class ScssTransformer(
+    val includePaths: List<File> = emptyList(),
+    val modulesBasePath: Path = Path.of("node_modules"),
+    override val cacheKey: TransformerCacheKey = StringTransformerCacheKey(includePaths.hashCode().toString())
 ) : Transformer<TransformerValue> {
 
 
@@ -58,6 +63,24 @@ class ScssTransformer(val includePaths: List<File> = emptyList(),
                 override fun openStream(): Reader {
                     val compiler = Compiler()
                     val options = Options()
+                    options.importers.add(object : Importer {
+                        override fun apply(url: String, previous: Import?): MutableCollection<Import>? {
+                            logger.debug { "should import $url ($previous)" }
+                            if (url.startsWith('~')) {
+                                val relative = url.substring(1)
+                                val nodeModules = modulesBasePath
+                                val path = sequenceOf("", ".scss", ".sass", ".css")
+                                    .map { relative + it }
+                                    .map { nodeModules.resolve(it) }
+                                    .tap { logger.debug { "Exists? ${it.toAbsolutePath()}"} }
+                                    .firstOrNull { Files.exists(it) } ?: return null
+                                logger.info { "Resolved $url to $path (${path.toUri()} // ${path.toAbsolutePath().toUri()}" }
+                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), Files.readString(path)))
+                            }
+                            return null
+                        }
+
+                    })
                     options.includePaths.addAll(includePaths)
 
                     val result = compiler.compileString(input.contentReader.read(), options)
@@ -79,3 +102,9 @@ class ScssTransformer(val includePaths: List<File> = emptyList(),
 //        logger.debug { "Successfully compiled scss from $input into $output" }
 //    }
 }
+
+private fun <T> Sequence<T>.tap(cb: (T) -> Unit): Sequence<T> =
+    map {
+        cb(it)
+        it
+    }

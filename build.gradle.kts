@@ -177,6 +177,7 @@ dependencies {
 
     // caching
     implementation("org.ehcache:ehcache:3.6.1")
+    compile("org.ehcache:ehcache:3.6.1")
 
     // Use the Kotlin test library
     testImplementation("org.jetbrains.kotlin:kotlin-test")

@@ -2,7 +2,6 @@ package com.dc2f.assets
 
 import com.dc2f.render.RenderCharAsset
 import java.io.Serializable
-import java.net.URI
 
 interface TransformerCacheKey : Serializable
 interface TransformerValue : Serializable
