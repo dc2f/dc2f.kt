@@ -6,7 +6,7 @@ import com.dc2f.render.RenderCharAsset
 import com.google.common.io.CharSource
 import mu.KotlinLogging
 import org.junit.jupiter.api.Test
-import java.nio.file.Path
+import java.nio.file.Paths
 
 private val logger = KotlinLogging.logger {}
 
@@ -15,7 +15,7 @@ internal class ScssTransformerTest {
     @Test
     fun importTest() {
         logger.debug { "Starting test." }
-        val transformer = ScssTransformer(modulesBasePath = Path.of("src/test"))
+        val transformer = ScssTransformer(modulesBasePath = Paths.get("src/test"))
         val result = transformer.transform(RenderCharAsset(CharSource.wrap("""
             // lorem ipsum
             @import '~resources/scss_transformer_test_import';
