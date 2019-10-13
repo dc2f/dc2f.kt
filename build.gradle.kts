@@ -98,6 +98,7 @@ signing {
 }
 
 tasks.withType<KotlinCompile> {
+    sourceCompatibility = "1.8"
     kotlinOptions.jvmTarget = "1.8"
     kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
 }

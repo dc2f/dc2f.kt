@@ -1,6 +1,7 @@
 package com.dc2f.assets
 
 import com.dc2f.render.RenderCharAsset
+import com.dc2f.util.readString
 import com.google.common.hash.Hashing
 import com.google.common.io.CharSource
 import io.bit3.jsass.*
@@ -15,7 +16,7 @@ private val logger = KotlinLogging.logger {}
 
 fun CharSequence.splitAtLastOccurrence(char: Char): Pair<String, String> {
     val pos = lastIndexOf(char)
-    return substring(0, pos) to substring(pos+1)
+    return substring(0, pos) to substring(pos + 1)
 }
 
 data class DigestValue(val integrityAttrValue: String) : TransformerValue
@@ -26,7 +27,8 @@ data class DigestValue(val integrityAttrValue: String) : TransformerValue
  * the html `integrity` attribute.
  */
 @Suppress("UnstableApiUsage")
-class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTransformerCacheKey("")) : Transformer<DigestValue> {
+class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTransformerCacheKey("")) :
+    Transformer<DigestValue> {
 
     override var value: DigestValue? = null
 
@@ -52,7 +54,7 @@ class DigestTransformer(override val cacheKey: TransformerCacheKey = StringTrans
 
 class ScssTransformer(
     val includePaths: List<File> = emptyList(),
-    val modulesBasePath: Path = Path.of("node_modules"),
+    val modulesBasePath: Path = Paths.get("node_modules"),
     override val cacheKey: TransformerCacheKey = StringTransformerCacheKey(includePaths.hashCode().toString())
 ) : Transformer<TransformerValue> {
 
@@ -72,10 +74,10 @@ class ScssTransformer(
                                 val path = sequenceOf("", ".scss", ".sass", ".css")
                                     .map { relative + it }
                                     .map { nodeModules.resolve(it) }
-                                    .tap { logger.debug { "Exists? ${it.toAbsolutePath()}"} }
+                                    .tap { logger.debug { "Exists? ${it.toAbsolutePath()}" } }
                                     .firstOrNull { Files.exists(it) } ?: return null
                                 logger.info { "Resolved $url to $path (${path.toUri()} // ${path.toAbsolutePath().toUri()}" }
-                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), Files.readString(path)))
+                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), path.readString()))
                             }
                             return null
                         }
