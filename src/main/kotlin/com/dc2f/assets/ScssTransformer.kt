@@ -1,14 +1,12 @@
 package com.dc2f.assets
 
 import com.dc2f.render.RenderCharAsset
-import com.dc2f.util.readString
 import com.google.common.hash.Hashing
 import com.google.common.io.CharSource
 import io.bit3.jsass.*
 import io.bit3.jsass.importer.*
 import mu.KotlinLogging
 import java.io.*
-import java.net.URI
 import java.nio.file.*
 import java.util.*
 
@@ -77,7 +75,15 @@ class ScssTransformer(
                                     .tap { logger.debug { "Exists? ${it.toAbsolutePath()}" } }
                                     .firstOrNull { Files.exists(it) } ?: return null
                                 logger.info { "Resolved $url to $path (${path.toUri()} // ${path.toAbsolutePath().toUri()}" }
-                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), path.readString()))
+//                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), path.readString()))
+//                                return mutableListOf(Import(path.toUri(), path.toAbsolutePath().toUri()))
+                                return mutableListOf(
+                                    Import(
+                                        path.toUri(),
+                                        path.toAbsolutePath().toUri(),
+                                        """@import '$path'; """
+                                    )
+                                )
                             }
                             return null
                         }

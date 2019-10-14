@@ -174,7 +174,7 @@ dependencies {
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")
     // preprocessors
-    implementation("io.bit3:jsass:5.7.3")
+    implementation("io.bit3:jsass:5.10.1")
 
     // caching
     implementation("org.ehcache:ehcache:3.6.1")
