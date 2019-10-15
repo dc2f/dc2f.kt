@@ -239,7 +239,7 @@ data class LoaderContext(
     private val contentByPathMutable = mutableMapOf<ContentPath, ContentDef>()
     val contentByPath get(): Map<ContentPath, ContentDef> = contentByPathMutable
     private val validatorsCollector: MutableList<(loaderContext: LoaderContext) -> String?> = mutableListOf()
-    val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
+    private val validators get(): List<(loaderContext: LoaderContext) -> String?> = validatorsCollector
     val registeredContent = mutableSetOf<ObjectDef>()
     private lateinit var metadataMap: Map<ObjectDef, ContentDefMetadata>
     val metadata get() = metadataMap
@@ -277,7 +277,7 @@ data class LoaderContext(
             }
             if (content is ValidationRequired) {
                 validatorsCollector.add { loaderContext: LoaderContext ->
-                    content.validate(loaderContext, parent)?.let { "${parent.metadata.path}: $it" }
+                    content.validate(loaderContext, parent)?.let { "${parent.metadata.path} (${parent.metadata.fsPath}): $it" }
                 }
             }
             true
