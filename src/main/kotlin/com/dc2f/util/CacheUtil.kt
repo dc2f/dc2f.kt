@@ -65,6 +65,7 @@ class CacheUtil : Closeable {
 
     override fun close() {
 //        if (this::cacheManager.isLazyInitialized) {
+        logger.info { "Closing cache." }
             cacheManager.close()
 //        }
     }

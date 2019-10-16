@@ -38,7 +38,11 @@ abstract class OutputType(val name: String) {
     }
 }
 
-abstract class Theme {
+interface ThemeMarker {
+
+}
+
+abstract class Theme : ThemeMarker {
 
     val config: ThemeConfig = ThemeConfig()
 

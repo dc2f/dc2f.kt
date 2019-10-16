@@ -32,6 +32,7 @@ data class RichTextContext(
     fun asMap() =
         mapOf(
             "node" to node,
+            "rootNode" to rootNode,
             "renderContext" to renderContext,
             "arguments" to arguments
             )

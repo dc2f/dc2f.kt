@@ -221,6 +221,7 @@ data class LoaderContext(
 ) : Closeable {
 
     enum class LoaderPhase {
+        Error,
         Loading,
         Validating,
         Finished,
@@ -228,6 +229,11 @@ data class LoaderContext(
 
         fun isAfter(before: LoaderPhase) =
             (ordinal > before.ordinal)
+
+        fun requireAfter(before: LoaderPhase) =
+            require(isAfter(before)) {
+                "Required state $before but was $this"
+            }
     }
 
     val cache = CacheUtil()
@@ -314,9 +320,15 @@ data class LoaderContext(
         @Suppress("UNCHECKED_CAST")
         val loader = ContentLoader(metadata.contentDefClass as KClass<ContentDef>)
         phase = LoaderPhase.Loading
-        val loadedContent = loader.reload(this, content, metadata)
-        val newMetadataMap = metadataMap + loadedContent.metadata.childrenMetadata + (loadedContent.content to loadedContent.metadata)
-        finishedLoadingStartValidate(newMetadataMap)
+        try {
+            val loadedContent = loader.reload(this, content, metadata)
+            val newMetadataMap =
+                metadataMap + loadedContent.metadata.childrenMetadata + (loadedContent.content to loadedContent.metadata)
+            finishedLoadingStartValidate(newMetadataMap)
+        } catch (e: Exception) {
+            phase = LoaderPhase.Error
+            logger.error(e) { "Error while reloading content." }
+        }
     }
 
     override fun close() {
@@ -431,7 +443,12 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
 
     fun loadWithoutClose(dir: Path): Pair<LoadedContent<T>, LoaderContext> {
         val context = LoaderContext(dir)
-        return load(context, dir) to context
+        try {
+            return load(context, dir) to context
+        } catch (e: Exception) {
+            context.close()
+            throw e;
+        }
     }
 
     internal fun reload(context: LoaderContext, content: ContentDef, metadata: ContentDefMetadata) =
