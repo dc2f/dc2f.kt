@@ -50,10 +50,16 @@ interface Dc2fSetup<ROOT_CONTENT : Website<*>> {
 open class Dc2fConfig<ROOT_CONTENT : com.dc2f.Website<*>>(
     val contentDirectory: String,
     val staticDirectory: String,
+    val assetBaseDirectory: String,
     val rootContentType: KClass<ROOT_CONTENT>,
     val urlConfigFromRootContent: (rootConfig: ROOT_CONTENT) -> UrlConfig,
     val theme: Theme
 ) {
+
+    init {
+        theme.config.assetBaseDirectory = FileSystems.getDefault().getPath(assetBaseDirectory)
+    }
+
     fun <T> loadWebsite(
         rootPath: String,
         cb: (website: LoadedContent<ROOT_CONTENT>, context: LoaderContext) -> T

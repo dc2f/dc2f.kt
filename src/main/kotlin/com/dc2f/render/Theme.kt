@@ -42,7 +42,7 @@ interface ThemeMarker {
 
 }
 
-abstract class Theme : ThemeMarker {
+abstract class Theme() : ThemeMarker {
 
     val config: ThemeConfig = ThemeConfig()
 
@@ -254,7 +254,7 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
 //        val resource =
 //            theme.javaClass.classLoader.getResource(path)?.toURI()
 //                ?: getResourceFromFileSystem(path)
-        val resource = getResourceFromFileSystem(path)
+        val resource = getAssetFromFileSystem(path)
         val size = try { File(resource).length() } catch (e: IllegalArgumentException) { -1L }
         @Suppress("UnstableApiUsage")
         return AssetPipeline(
@@ -267,9 +267,10 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
         )
     }
 
-    fun getResourceFromFileSystem(path: String): URI {
+    fun getAssetFromFileSystem(path: String): URI {
         // TODO kinda hackish, don't you think?
-        val root = FileSystems.getDefault().getPath("src", "main", "resources")
+        //val root = FileSystems.getDefault().getPath("src", "main", "resources")
+        val root = theme.config.assetBaseDirectory
         val resource = root.resolve(path)
         if (!Files.exists(resource)) {
             throw IllegalArgumentException("Unable to find required asset: $path (in $resource)")
@@ -375,21 +376,8 @@ class ThemeConfig {
             pageClass.isSuperclassOf(node::class)
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     internal val renderers = mutableMapOf<OutputType, MutableList<RenderConfig<*>>>()
+    internal lateinit var assetBaseDirectory: Path
 
     inline fun <reified T : ContentDef> pageRenderer(
         forOutputType: OutputType = OutputType.html,
