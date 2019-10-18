@@ -10,12 +10,12 @@ import com.vladsch.flexmark.html.*
 import com.vladsch.flexmark.html.renderer.*
 import com.vladsch.flexmark.parser.Parser
 import com.vladsch.flexmark.util.ast.*
+import com.vladsch.flexmark.util.data.*
 import com.vladsch.flexmark.util.html.Attributes
-import com.vladsch.flexmark.util.options.*
 import jodd.bean.BeanUtil
 import mu.KotlinLogging
 import org.springframework.expression.spel.standard.SpelExpressionParser
-import java.nio.file.*
+import java.nio.file.Path
 
 private val logger = KotlinLogging.logger {}
 
@@ -23,7 +23,7 @@ object MarkdownDc2fExtension : HtmlRenderer.HtmlRendererExtension {
     override fun extend(rendererBuilder: HtmlRenderer.Builder, rendererType: String?) {
         rendererBuilder.nodeRendererFactory { options -> MarkdownMacroRenderer(options) }
         rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
-            override fun create(context: LinkResolverContext): LinkResolver =
+            override fun apply(context: LinkResolverContext): LinkResolver =
                 Dc2fLinkResolver(context)
         })
     }
