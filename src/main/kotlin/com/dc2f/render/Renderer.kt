@@ -226,6 +226,7 @@ class FileOutputRenderer(
         renderTiming.measure {
             renderContent(node, metadata, forOutputType = OutputType.html)
             renderContent(node, metadata, forOutputType = OutputType.robotsTxt)
+            renderContent(node, metadata, forOutputType = OutputType.rssFeed)
         }
         logger.info { "Finished rendering." }
         logger.info { "cache Stats: ${loaderContext.cache.allStatistics}" }

@@ -39,7 +39,26 @@ class PebbleRenderExtension : AbstractExtension() {
                     val content = args["content"]
                     return SafeString(RichText.render(content, renderContext))
                 }
+            },
+            "href" to object : Function {
+                override fun getArgumentNames(): List<String> =
+                    listOf("path")
 
+                override fun execute(
+                    args: MutableMap<String, Any>,
+                    self: PebbleTemplate,
+                    context: EvaluationContext,
+                    lineNumber: Int
+                ): Any {
+                    val renderContext = context.getVariable("renderContext") as RenderContext<*>
+                    val pathString = requireNotNull(args["path"] as? String)
+                    val path = ContentPath.parse(pathString)
+                    val content = renderContext.renderer.loaderContext.contentByPath[path]
+                    if (content != null) {
+                        return renderContext.renderer.href(content, false)
+                    }
+                    throw IllegalArgumentException("Unable to find content for $pathString")
+                }
             }
         )
 
