@@ -257,6 +257,7 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
 //                ?: getResourceFromFileSystem(path)
         val resource = getAssetFromFileSystem(path)
         val size = try { File(resource).length() } catch (e: IllegalArgumentException) { -1L }
+        logger.debug { "getAsset for $path:$size" }
         @Suppress("UnstableApiUsage")
         return AssetPipeline(
             "$path:$size",
