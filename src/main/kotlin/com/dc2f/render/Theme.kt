@@ -241,7 +241,10 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
         }
     }
 
-    fun appendHTML() =
+    fun appendHtmlPartial() =
+        out.appendHTML()
+
+    fun appendHtmlDocument() =
         out.run {
             appendln("<!DOCTYPE html>")
             appendHTML()
