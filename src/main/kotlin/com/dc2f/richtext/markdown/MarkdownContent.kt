@@ -247,7 +247,8 @@ class Markdown(private val content: String) : ParsableObjectDef, RichText, Valid
                         it.substring(0, it.length - "<br /><br />".length)
                     }
                 } else {
-                    html
+                    html.takeIf { html.contains("<p>") }
+                        ?: "<p>$html</p>"
                 }
             }
     }
