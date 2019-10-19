@@ -4,6 +4,9 @@ import com.dc2f.*
 import com.dc2f.render.RenderContext
 import com.dc2f.richtext.*
 import com.dc2f.util.*
+import com.vladsch.flexmark.ext.admonition.AdmonitionExtension
+import com.vladsch.flexmark.ext.anchorlink.*
+import com.vladsch.flexmark.ext.toc.*
 import com.vladsch.flexmark.ext.typographic.TypographicExtension
 import com.vladsch.flexmark.ext.xwiki.macros.*
 import com.vladsch.flexmark.html.*
@@ -61,6 +64,10 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
             return link
         }
         try {
+            if (link.url == "TOC" || link.url.startsWith("TOC ")) {
+                logger.debug { "Found TOC. ignoring." }
+                return link
+            }
             if (link.url.startsWith('@') || (!link.url.contains("://") && !link.url.contains("@"))) {
                 // validate internal link.
                 val loaderContext = requireNotNull(context.options[LOADER_CONTEXT])
@@ -80,7 +87,7 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
                 val parentContentPath = parent?.let { loaderContext.findContentPath(it) }
 
                 val linkedContent = loaderContext.contentByPath[parentContentPath?.resolve(link.url) ?: ContentPath.parse(link.url)]
-                    ?: throw ValidationException("Invalid link: ${link.toStringReflective()}")
+                    ?: throw ValidationException("Invalid link to {${link.url}): ${link.toStringReflective()}")
 
                 return renderContext?.let { renderContext ->
                     val l = link.withStatus(LinkStatus.VALID)
@@ -190,10 +197,14 @@ class Markdown(private val content: String) : ParsableObjectDef, RichText, Valid
 //                .set(MacroExtension.ENABLE_RENDERING, true)
                 .set(MacroExtension.ENABLE_INLINE_MACROS, true)
                 .set(MacroExtension.ENABLE_BLOCK_MACROS, true)
+                .set(AnchorLinkExtension.ANCHORLINKS_ANCHOR_CLASS, "md-anchor")
                 .set(Parser.EXTENSIONS, listOf(
                     MacroExtension.create(),
                     MarkdownDc2fExtension,
-                    TypographicExtension.create()
+                    AnchorLinkExtension.create(),
+//                    TocExtension.create(), // for some reason this won't work.
+                    TypographicExtension.create(),
+                    AdmonitionExtension.create()
                     ))
         }
 
