@@ -199,7 +199,8 @@ class FileAsset(file: ContentPath, fsPath: Path): BaseFileAsset(file, fsPath)
 enum class FillType {
     Fit,
     Cover,
-    Transform
+    Transform,
+    NoResize,
 }
 
 //data class ImageSize(
@@ -237,6 +238,16 @@ class ResizedImage(
     val height: Int
 )
 
+data class TransformedPictureSource(
+    val href: String,
+    val type: String
+)
+
+data class TransformedPicture(
+    val sources: List<TransformedPictureSource>,
+    val image: ResizedImage
+)
+
 class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) {
     val imageInfo: ImageInfo by lazy { parseImage() }
     val width by lazy { imageInfo.width }
@@ -249,11 +260,26 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
         loaderContext.cache.cacheDirectory.toPath().resolve("dc2f-image-resize")
             .also { Files.createDirectories(it) }
 
-    fun resize(
+    fun transform(
         context: RenderContext<*>,
         width: Int,
         height: Int,
         fillType: FillType
+    ): TransformedPicture {
+        val image = resize(context, width, height, fillType)
+        val webp = resize(context, width, height, fillType, "webp")
+        return TransformedPicture(
+            listOf(TransformedPictureSource(webp.href, "image/webp")),
+            image
+        )
+    }
+
+    fun resize(
+        context: RenderContext<*>,
+        width: Int,
+        height: Int,
+        fillType: FillType,
+        targetFormatName: String? = null
     ): ResizedImage {
 //        if (context !is FileRenderContext) {
 //            logger.warn { "We are not rendering to file system. can't resize image." }
@@ -277,14 +303,22 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
                     FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
                     FillType.Fit -> thumbnails.size(width, height)
                     FillType.Transform -> thumbnails.forceSize(width, height)
+                    FillType.NoResize -> {}
                 }
                 val thumbnailImage = thumbnails.asBufferedImage()
 
                 val cachedFileName = "${file.name}.${UUID.randomUUID()}.${file.name}"
 
-                FileImageSink(cachePath.resolve(cachedFileName).toFile()).write(thumbnailImage)
+                val sink = FileImageSink(cachePath.resolve(cachedFileName).toFile())
+                if (targetFormatName != null) {
+                    sink.setOutputFormatName(targetFormatName)
+                }
+                sink.write(thumbnailImage)
+                if (sink.sink.name != cachedFileName) {
+                    logger.info { "written output file ${sink.sink.name} differs from cachedFileName $cachedFileName" }
+                }
 
-                ImageResizeCacheData(cachedFileName, thumbnailImage.width, thumbnailImage.height)
+                ImageResizeCacheData(sink.sink.name, thumbnailImage.width, thumbnailImage.height)
                     .also { imageCache().imageResizeCache.put(cacheKey, it) }
             }()
 
