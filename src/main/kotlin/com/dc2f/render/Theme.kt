@@ -4,7 +4,7 @@ import com.dc2f.*
 import com.dc2f.assets.*
 import com.dc2f.util.isLazyInitialized
 import com.google.common.io.*
-import kotlinx.html.TagConsumer
+import kotlinx.html.*
 import kotlinx.html.stream.appendHTML
 import mu.KotlinLogging
 import java.io.*
@@ -175,6 +175,8 @@ class LazyFileRenderOutput(val filePath: Path) : RenderOutput() {
         writer.appendln(string)
     }
 
+    override fun append(string: String) { writer.append(string) }
+
     override fun appendHTML() = writer.appendHTML()
 
     override fun close() {
@@ -186,6 +188,7 @@ class LazyFileRenderOutput(val filePath: Path) : RenderOutput() {
 
 class AppendableOutput(val appendable: Appendable) : RenderOutput() {
     override fun appendln(string: String) { appendable.appendln(string) }
+    override fun append(string: String) { appendable.append(string) }
     override fun appendHTML(): TagConsumer<Appendable> = appendable.appendHTML()
     override fun close() {}
 
@@ -193,6 +196,7 @@ class AppendableOutput(val appendable: Appendable) : RenderOutput() {
 
 abstract class RenderOutput : Closeable {
     abstract fun appendln(string: String)
+    abstract fun append(string: String)
     internal abstract fun appendHTML() : TagConsumer<Appendable>
 }
 
@@ -241,8 +245,11 @@ abstract class RenderContext<T : ContentDef> : RenderContextData<T> {
         }
     }
 
-    fun appendHtmlPartial() =
-        out.appendHTML()
+    fun appendHtmlPartial(block: DIV.() -> Unit) {
+        val tmpOut = StringWriter()
+        tmpOut.appendHTML().div(block = block)
+        out.append(tmpOut.toString().trim().removePrefix("<div>").removeSuffix("</div>"))
+    }
 
     fun appendHtmlDocument() =
         out.run {

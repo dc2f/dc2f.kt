@@ -161,7 +161,7 @@ dependencies {
     compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
     compile("org.apache.xmlgraphics:batik-transcoder:1.10")
     compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
-    compile("org.sejda.imageio:imageio-webp:0.1.0")
+    compile("org.sejda.imageio:webp-imageio:0.1.1")
     implementation("com.ibm.icu:icu4j:63.1")
 
 

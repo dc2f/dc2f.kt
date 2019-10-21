@@ -288,12 +288,13 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
 
         val cachePath = cachePath(context.renderer.loaderContext)
 //        val targetPathOrig = context.rootPath.resolve(file.toString())
-        val fileName = "${fillType}_${width}x${height}_${file.name}"
+        val ext = targetFormatName?.let { ".$it" } ?: ""
+        val fileName = "${fillType}_${width}x${height}_${targetFormatName ?: "orig"}_${file.name}$ext"
 //        val (renderPath, targetPath) = getTargetOutputPath(context, fileName = fileName)
 
         // FIXME: 1.) implement some way to clean up old resized images.
         //        2.) if because of some reason there is a cache entry, but no resized file, we have to resize it again.
-        val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name)
+        val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name, targetFormatName)
         val cachedData = imageCache().imageResizeCache.get(cacheKey)
             ?: {
                 logger.info { "Image not found in cache. need to recompute $cacheKey" }
@@ -303,7 +304,7 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
                     FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
                     FillType.Fit -> thumbnails.size(width, height)
                     FillType.Transform -> thumbnails.forceSize(width, height)
-                    FillType.NoResize -> {}
+                    FillType.NoResize -> thumbnails.scale(1.0)
                 }
                 val thumbnailImage = thumbnails.asBufferedImage()
 
@@ -358,7 +359,8 @@ data class ImageResizeCacheKey(
     val imageFileSize: Long,
     val width: Int,
     val height: Int,
-    val fillTypeName: String
+    val fillTypeName: String,
+    val formatName: String?
 ) : Serializable
 
 data class ImageResizeCacheData(val cachedFileName: String, val width: Int, val height: Int) :
