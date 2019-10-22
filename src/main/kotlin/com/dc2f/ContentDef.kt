@@ -260,18 +260,26 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
         loaderContext.cache.cacheDirectory.toPath().resolve("dc2f-image-resize")
             .also { Files.createDirectories(it) }
 
+    override fun toString(): String {
+        return "ImageAsset(contentpath=$file, width=$width, height=$height)"
+    }
+
     fun transform(
         context: RenderContext<*>,
         width: Int,
         height: Int,
         fillType: FillType
     ): TransformedPicture {
-        val image = resize(context, width, height, fillType)
-        val webp = resize(context, width, height, fillType, "webp")
-        return TransformedPicture(
-            listOf(TransformedPictureSource(webp.href, "image/webp")),
-            image
-        )
+        try {
+            val image = resize(context, width, height, fillType)
+            val webp = resize(context, width, height, fillType, "webp")
+            return TransformedPicture(
+                listOf(TransformedPictureSource(webp.href, "image/webp")),
+                image
+            )
+        } catch (e: Exception) {
+            throw RuntimeException("Error while resizing/converting image $this ($width, $height, $fillType)", e)
+        }
     }
 
     fun resize(
@@ -350,6 +358,7 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
             ImageUtil.readImageData(fsPath)
                 ?: throw IllegalArgumentException("Invalid image at $fsPath")
         }
+
 
 }
 
