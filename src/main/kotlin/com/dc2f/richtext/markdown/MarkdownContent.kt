@@ -6,6 +6,7 @@ import com.dc2f.richtext.*
 import com.dc2f.util.*
 import com.vladsch.flexmark.ext.admonition.AdmonitionExtension
 import com.vladsch.flexmark.ext.anchorlink.*
+import com.vladsch.flexmark.ext.enumerated.reference.EnumeratedReferenceExtension
 import com.vladsch.flexmark.ext.toc.*
 import com.vladsch.flexmark.ext.typographic.TypographicExtension
 import com.vladsch.flexmark.ext.xwiki.macros.*
@@ -25,10 +26,10 @@ private val logger = KotlinLogging.logger {}
 object MarkdownDc2fExtension : HtmlRenderer.HtmlRendererExtension {
     override fun extend(rendererBuilder: HtmlRenderer.Builder, rendererType: String?) {
         rendererBuilder.nodeRendererFactory { options -> MarkdownMacroRenderer(options) }
-        rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
-            override fun apply(context: LinkResolverContext): LinkResolver =
-                Dc2fLinkResolver(context)
-        })
+//        rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
+//            override fun apply(context: LinkResolverContext): LinkResolver =
+//                Dc2fLinkResolver(context)
+//        })
     }
 
     override fun rendererOptions(options: MutableDataHolder?) {
@@ -198,12 +199,17 @@ class Markdown(private val content: String) : ParsableObjectDef, RichText, Valid
                 .set(MacroExtension.ENABLE_INLINE_MACROS, true)
                 .set(MacroExtension.ENABLE_BLOCK_MACROS, true)
                 .set(AnchorLinkExtension.ANCHORLINKS_ANCHOR_CLASS, "md-anchor")
+                .set(TocExtension.LEVELS, 1 or 2 or 4)
+                .set(TocExtension.IS_NUMBERED, true)
+                .set(TocExtension.LIST_CLASS, "md-toc")
+                .set(TocExtension.DIV_CLASS, "md-toc-div")
                 .set(Parser.EXTENSIONS, listOf(
                     MacroExtension.create(),
                     MarkdownDc2fExtension,
                     AnchorLinkExtension.create(),
-//                    TocExtension.create(), // for some reason this won't work.
+                    TocExtension.create(),
                     TypographicExtension.create(),
+                    EnumeratedReferenceExtension.create(),
                     AdmonitionExtension.create()
                     ))
         }

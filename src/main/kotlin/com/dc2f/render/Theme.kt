@@ -35,7 +35,7 @@ abstract class OutputType(val name: String) {
     companion object {
         val html = SimpleOutputType("html", "index.html")
         val robotsTxt = SimpleOutputType("robots.txt", "robots.txt")
-        val rssFeed = SimpleOutputType("rss", "feed.rss")
+        val rssFeed = SimpleOutputType("rss", "feed-rss.xml")
     }
 }
 
