@@ -8,6 +8,7 @@ import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
 import net.coobird.thumbnailator.tasks.io.FileImageSink
+import org.apache.batik.util.MimeTypeConstants
 import org.ehcache.Cache
 import org.ehcache.config.builders.*
 import org.ehcache.config.units.*
@@ -271,6 +272,13 @@ class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) 
         fillType: FillType
     ): TransformedPicture {
         try {
+            if (imageInfo.isAnimatedGif) {
+                logger.warn { "We don't support resizing/converting animated gifs. for $imageInfo" }
+                return TransformedPicture(
+                    listOf(),
+                    ResizedImage(href(context), imageInfo.width, imageInfo.height)
+                )
+            }
             val image = resize(context, width, height, fillType)
             val webp = resize(context, width, height, fillType, "webp")
             return TransformedPicture(

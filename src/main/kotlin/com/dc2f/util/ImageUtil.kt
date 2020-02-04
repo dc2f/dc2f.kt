@@ -16,8 +16,15 @@ data class ImageInfo(
     val mimeType: String,
     val mimeTypes: List<String>,
     val fileName: String,
-    val brightnessRatio: Double?
+    val brightnessRatio: Double?,
+    val numImages: Int
 ) : Serializable
+
+val ImageInfo.isSvg: Boolean
+    get() = mimeTypes.any { it.contains("svg") }
+
+val ImageInfo.isAnimatedGif: Boolean
+    get() = mimeType == "image/gif" && numImages > 1
 
 object ImageUtil {
     fun readImageData(path: Path): ImageInfo? {
@@ -36,7 +43,7 @@ object ImageUtil {
             val mimeTypes = reader.originatingProvider.mimeTypes
             logger.debug { "MimeTypes for ${format}: ${mimeTypes?.contentToString()}" }
             if (mimeTypes.size != 1) {
-                logger.warn { "No unique mime type for ${format} $path: ${mimeTypes?.contentToString()}" }
+                logger.warn { "No unique mime type for $format $path: ${mimeTypes?.contentToString()}" }
             }
             val mimeType = mimeTypes.first()
 
@@ -71,7 +78,8 @@ object ImageUtil {
                 mimeType,
                 mimeTypes.toList(),
                 path.fileName.toString(),
-                brightnessRatio
+                brightnessRatio,
+                numImages
             )
         }
     }
