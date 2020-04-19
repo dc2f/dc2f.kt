@@ -41,9 +41,9 @@ interface ValidationRequired {
     fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String?
 }
 
-typealias ValidationRequiredLambda = (context: LoaderContext) -> String
+//typealias ValidationRequiredLambda = (context: LoaderContext) -> String
 
-val VALIDATORS = DataKey<MutableList<ValidationRequiredLambda>>("VALIDATORS") { mutableListOf() }
+//val VALIDATORS = DataKey<MutableList<ValidationRequiredLambda>>("VALIDATORS") { mutableListOf() }
 val LOADER_CONTEXT = NullableDataKey<LoaderContext>("LOADER_CONTEXT", null)
 val PARENT = NullableDataKey<ObjectDef?>("PARENT", null as ObjectDef?)
 val RENDER_CONTEXT = NullableDataKey<RenderContext<*>>("RENDER_CONTEXT", null as RenderContext<*>?)
@@ -60,10 +60,6 @@ class Dc2fLinkResolver(val context: LinkResolverBasicContext): LinkResolver {
 ////            logger.info { "Validating stuff." }
 ////            ""
 ////        }
-        if (link.url == null) {
-            logger.warn { "Found a link with null url?! ${link.toStringReflective()}" }
-            return link
-        }
         try {
             if (link.url == "TOC" || link.url.startsWith("TOC ")) {
                 logger.debug { "Found TOC. ignoring." }
@@ -90,7 +86,7 @@ class Dc2fLinkResolver(val context: LinkResolverBasicContext): LinkResolver {
                 val linkedContent = loaderContext.contentByPath[parentContentPath?.resolve(link.url) ?: ContentPath.parse(link.url)]
                     ?: throw ValidationException("Invalid link to {${link.url}): ${link.toStringReflective()}")
 
-                return renderContext?.let { renderContext ->
+                return renderContext?.let { //renderContext ->
                     val l = link.withStatus(LinkStatus.VALID)
                         .withUrl(renderContext.href(linkedContent))
                         .withTitle(renderContext.theme.renderLinkTitle(linkedContent))
@@ -127,7 +123,7 @@ TODO the markdown renderer has quite a few problems
  - generally it does not fail for broken macros.
  - it should be easier to reference content.
  */
-class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
+class MarkdownMacroRenderer(@Suppress("UNUSED_PARAMETER") options: DataHolder) : NodeRenderer {
 
     companion object {
         val expressionParser by lazy { SpelExpressionParser() }
@@ -164,8 +160,8 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
 
     override fun getNodeRenderingHandlers(): MutableSet<NodeRenderingHandler<*>> =
         mutableSetOf(
-            NodeRenderingHandler<Macro>(Macro::class.java, ::render),
-            NodeRenderingHandler<MacroBlock>(MacroBlock::class.java) { param: MacroBlock, nodeRendererContext: NodeRendererContext, htmlWriter: HtmlWriter ->
+            NodeRenderingHandler(Macro::class.java, ::render),
+            NodeRenderingHandler(MacroBlock::class.java) { param: MacroBlock, nodeRendererContext: NodeRendererContext, htmlWriter: HtmlWriter ->
                 if (!param.isClosedTag) {
                     throw IllegalArgumentException("Tag must be closed. Got: ${param.chars}")
                 }
