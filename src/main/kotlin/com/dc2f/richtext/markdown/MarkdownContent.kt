@@ -24,17 +24,17 @@ import java.nio.file.Path
 private val logger = KotlinLogging.logger {}
 
 object MarkdownDc2fExtension : HtmlRenderer.HtmlRendererExtension {
-    override fun extend(rendererBuilder: HtmlRenderer.Builder, rendererType: String?) {
+    override fun extend(rendererBuilder: HtmlRenderer.Builder, rendererType: String) {
         rendererBuilder.nodeRendererFactory { options -> MarkdownMacroRenderer(options) }
         rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
-            override fun apply(context: LinkResolverContext): LinkResolver =
-                Dc2fLinkResolver(context)
+            override fun apply(context: LinkResolverBasicContext): LinkResolver =
+                    Dc2fLinkResolver(context)
         })
+
     }
 
-    override fun rendererOptions(options: MutableDataHolder?) {
+    override fun rendererOptions(options: MutableDataHolder) {
     }
-
 }
 
 interface ValidationRequired {
@@ -44,16 +44,16 @@ interface ValidationRequired {
 typealias ValidationRequiredLambda = (context: LoaderContext) -> String
 
 val VALIDATORS = DataKey<MutableList<ValidationRequiredLambda>>("VALIDATORS") { mutableListOf() }
-val LOADER_CONTEXT = DataKey<LoaderContext>("LOADER_CONTEXT", null as LoaderContext?)
-val PARENT = DataKey<ObjectDef?>("PARENT", null as ObjectDef?)
-val RENDER_CONTEXT = DataKey<RenderContext<*>>("RENDER_CONTEXT", null as RenderContext<*>?)
+val LOADER_CONTEXT = NullableDataKey<LoaderContext>("LOADER_CONTEXT", null)
+val PARENT = NullableDataKey<ObjectDef?>("PARENT", null as ObjectDef?)
+val RENDER_CONTEXT = NullableDataKey<RenderContext<*>>("RENDER_CONTEXT", null as RenderContext<*>?)
 
 class ValidationException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
-class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
+class Dc2fLinkResolver(val context: LinkResolverBasicContext): LinkResolver {
     override fun resolveLink(
-        node: Node?,
-        context: LinkResolverContext,
+        node: Node,
+        context: LinkResolverBasicContext,
         link: ResolvedLink
     ): ResolvedLink {
 //        context.document?.get(VALIDATORS)?.add { context ->
@@ -71,9 +71,9 @@ class Dc2fLinkResolver(val context: LinkResolverContext): LinkResolver {
             }
             if (link.url.startsWith('@') || (!link.url.contains("://") && !link.url.contains("@"))) {
                 // validate internal link.
-                val loaderContext = requireNotNull(context.options[LOADER_CONTEXT])
-                val renderContext = context.options[RENDER_CONTEXT]
-                val parent = context.options[PARENT]
+                val loaderContext = requireNotNull(LOADER_CONTEXT[context.options])
+                val renderContext = RENDER_CONTEXT[context.options]
+                val parent = PARENT[context.options]
 
                 if (link.url.startsWith('@')) {
                     if (renderContext == null) {
@@ -142,7 +142,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
             throw IllegalArgumentException("Unsupported macro in markdown context. ${param.name}")
         }
 
-        val loaderContext = nodeRendererContext.options[LOADER_CONTEXT]
+        val loaderContext = requireNotNull(LOADER_CONTEXT[nodeRendererContext.options])
 
         if (!loaderContext.phase.isAfter(LoaderContext.LoaderPhase.Validating)) {
             // we are in validation step. do not do anything yet.
@@ -150,7 +150,7 @@ class MarkdownMacroRenderer(options: DataHolder) : NodeRenderer {
             return
         }
 
-        val renderContext = nodeRendererContext.options[RENDER_CONTEXT]
+        val renderContext = requireNotNull(RENDER_CONTEXT[nodeRendererContext.options])
         val context = RichTextContext(renderContext.node, renderContext.renderer.loaderContext, renderContext, null)
         val contentPath = param.attributes["content"]
         val arguments = param.attributes["arguments"]?.let { str ->

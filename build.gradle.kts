@@ -166,7 +166,7 @@ dependencies {
 
 
     // content parsers
-    implementation("com.vladsch.flexmark:flexmark-all:0.50.42")
+    implementation("com.vladsch.flexmark:flexmark-all:0.61.14")
     implementation("org.jodd:jodd-bean:5.1.4") // for resolving paths
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")
     implementation("io.pebbletemplates:pebble:3.0.8")
