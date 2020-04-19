@@ -26,10 +26,10 @@ private val logger = KotlinLogging.logger {}
 object MarkdownDc2fExtension : HtmlRenderer.HtmlRendererExtension {
     override fun extend(rendererBuilder: HtmlRenderer.Builder, rendererType: String?) {
         rendererBuilder.nodeRendererFactory { options -> MarkdownMacroRenderer(options) }
-//        rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
-//            override fun apply(context: LinkResolverContext): LinkResolver =
-//                Dc2fLinkResolver(context)
-//        })
+        rendererBuilder.linkResolverFactory(object : IndependentLinkResolverFactory() {
+            override fun apply(context: LinkResolverContext): LinkResolver =
+                Dc2fLinkResolver(context)
+        })
     }
 
     override fun rendererOptions(options: MutableDataHolder?) {

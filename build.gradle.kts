@@ -167,7 +167,7 @@ dependencies {
 
     // content parsers
     implementation("com.vladsch.flexmark:flexmark-all:0.50.42")
-    implementation("org.jodd:jodd-bean:5.0.8") // for resolving paths
+    implementation("org.jodd:jodd-bean:5.1.4") // for resolving paths
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")
     implementation("io.pebbletemplates:pebble:3.0.8")
     implementation("org.springframework:spring-expression:5.1.5.RELEASE") // right now only used to parse "arguments" from markdown
