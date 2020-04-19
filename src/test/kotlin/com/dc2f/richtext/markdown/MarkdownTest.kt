@@ -83,6 +83,14 @@ class MarkdownTest {
         debugMarkdown("Lorem [label](/link)")
     }
 
+    @Test
+    fun admonitionTest() {
+        debugMarkdown("""
+            !!! warning
+                lorem ipsum
+        """.trimIndent())
+    }
+
     private fun debugMarkdown(source: String): String {
         val document = Markdown.parser.parse(source)
 //        document[VALIDATORS].map { it() }

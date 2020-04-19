@@ -84,7 +84,7 @@ class Dc2fLinkResolver(val context: LinkResolverBasicContext): LinkResolver {
                 val parentContentPath = parent?.let { loaderContext.findContentPath(it) }
 
                 val linkedContent = loaderContext.contentByPath[parentContentPath?.resolve(link.url) ?: ContentPath.parse(link.url)]
-                    ?: throw ValidationException("Invalid link to {${link.url}): ${link.toStringReflective()}")
+                    ?: throw ValidationException("Invalid link to {${link.url}}: ${link.toStringReflective()}")
 
                 return renderContext?.let { //renderContext ->
                     val l = link.withStatus(LinkStatus.VALID)
