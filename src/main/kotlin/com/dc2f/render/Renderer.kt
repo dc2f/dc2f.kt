@@ -261,8 +261,13 @@ class FileOutputRenderer(
                 ).render()
             }
 
-            (node as? WithRenderPathAliases)?.renderPathAliases(this)?.let {
-                writeRenderPathAliases(node, it)
+            if (forOutputType == OutputType.html) {
+                (node as? WithRenderPathAliases)?.renderPathAliases(this)?.let {
+                    writeRenderPathAliases(node, it)
+                }
+                (node as? WithRedirect)?.uriReferencePath(this)?.let {
+                    writeRedirect(renderPath, absoluteUrl(it))
+                }
             }
         } catch (e: Throwable) {
             throw Exception("Error while rendering into $renderPath: ${e.message}", e)
@@ -276,25 +281,33 @@ class FileOutputRenderer(
         val targetRenderPath = findRenderPath(node)
         val targetUrl = absoluteUrl(UriReferencePath.fromRenderPath(targetRenderPath, urlConfig))
         renderPathAliases.forEach { alias ->
-            val renderPathFile = alias.childLeaf("index.html")
-            val dir = target.resolve(renderPathFile.parent().toString())
-            Files.createDirectories(dir)
-            Files.newBufferedWriter(dir.resolve(renderPathFile.name)).use { writer ->
-                writer.appendHTML(prettyPrint = false).html {
-                    head {
-                        link(href = targetUrl) {
-                            rel = "canonical"
-                        }
-                        meta("robots", "noindex")
-                        meta(charset = "utf-8")
-                        meta {
-                            httpEquiv = "refresh"
-                            content = "0; url=$targetUrl"
-                        }
-                    }
-                }
-            }
+            writeRedirect(alias, targetUrl)
         }
+    }
+
+    private fun writeRedirect(
+      sourcePath: RenderPath,
+      targetUrl: String
+    ) {
+        val renderPathFile = sourcePath.childLeaf("index.html")
+        val dir = target.resolve(renderPathFile.parent().toString())
+        Files.createDirectories(dir)
+        Files.newBufferedWriter(dir.resolve(renderPathFile.name), StandardOpenOption.CREATE_NEW)
+          .use { writer ->
+              writer.appendHTML(prettyPrint = false).html {
+                  head {
+                      link(href = targetUrl) {
+                          rel = "canonical"
+                      }
+                      meta("robots", "noindex")
+                      meta(charset = "utf-8")
+                      meta {
+                          httpEquiv = "refresh"
+                          content = "0; url=$targetUrl"
+                      }
+                  }
+              }
+          }
     }
 
 

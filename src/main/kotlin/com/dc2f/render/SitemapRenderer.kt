@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.*
 import com.redfin.sitemapgenerator.*
 import io.ktor.http.URLBuilder
 import java.nio.file.Path
+import java.time.Instant
 import java.util.*
 
 interface WithSitemapInfo {
@@ -24,7 +25,7 @@ class SitemapRenderer(
     private val target: Path,
     val loaderContext: LoaderContext,
     val renderer: Renderer,
-    val urlConfig: UrlConfig
+    private val urlConfig: UrlConfig
 ) {
 
     fun render() {
@@ -49,7 +50,7 @@ class SitemapRenderer(
                             // TODO for now simply take the current date as modification date, if there
                             //      is no git information. We maybe should change this to the file system file,
                             //      or a fallback property defined by the user.
-                            node.commitInfo?.authorDate?.toInstant()?.let(Date::from) ?: Date()
+                            node.commitInfo?.authorDate?.toInstant()?.let(Date::from) ?: Date.from(Instant.now())
                         )
                 )
             )
