@@ -10,7 +10,7 @@ if (version == "unspecified") {
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
-    id("org.jetbrains.kotlin.jvm").version("1.3.10")
+    kotlin("jvm") version "1.4.0"
     `maven-publish`
     signing
 }
