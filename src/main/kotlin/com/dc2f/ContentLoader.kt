@@ -1,29 +1,44 @@
 package com.dc2f
 
-import com.dc2f.git.*
-import com.dc2f.loader.*
+import com.dc2f.git.CommitInfo
+import com.dc2f.git.GitInfoLoaderCmd
+import com.dc2f.loader.ContentDefPropertyReflectionNested
+import com.dc2f.loader.ContentDefReflection
+import com.dc2f.loader.TolerantZonedDateTime
 import com.dc2f.richtext.markdown.ValidationRequired
-import com.dc2f.util.*
+import com.dc2f.util.CacheUtil
+import com.dc2f.util.Timing
+import com.dc2f.util.then
+import com.dc2f.util.toStringReflective
 import com.fasterxml.jackson.annotation.JacksonInject
 import com.fasterxml.jackson.core.Version
 import com.fasterxml.jackson.databind.*
-import com.fasterxml.jackson.databind.introspect.*
+import com.fasterxml.jackson.databind.introspect.AnnotatedMember
+import com.fasterxml.jackson.databind.introspect.AnnotatedMethod
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
-import com.fasterxml.jackson.module.mrbean.*
+import com.fasterxml.jackson.module.mrbean.AbstractTypeMaterializer
+import com.fasterxml.jackson.module.mrbean.MrBeanModule
 import io.ktor.http.*
 import kotlinx.io.core.Closeable
 import mu.KotlinLogging
-import net.sf.cglib.proxy.*
-import org.apache.commons.lang3.builder.*
+import net.sf.cglib.proxy.Enhancer
+import net.sf.cglib.proxy.MethodInterceptor
+import net.sf.cglib.proxy.MethodProxy
+import org.apache.commons.lang3.builder.ReflectionToStringBuilder
+import org.apache.commons.lang3.builder.ToStringStyle
 import org.reflections.Reflections
 import java.lang.reflect.Method
-import java.nio.file.*
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.reflect.KClass
-import kotlin.reflect.full.*
+import kotlin.reflect.full.companionObjectInstance
+import kotlin.reflect.full.findAnnotation
+import kotlin.reflect.full.isSubclassOf
+import kotlin.reflect.full.superclasses
 import kotlin.reflect.jvm.javaSetter
 import kotlin.streams.toList
 
@@ -317,13 +332,14 @@ data class LoaderContext(
 
     fun reload(content: ContentDef) {
         val metadata = requireNotNull(metadataMap[content])
+
         @Suppress("UNCHECKED_CAST")
         val loader = ContentLoader(metadata.contentDefClass as KClass<ContentDef>)
         phase = LoaderPhase.Loading
         try {
             val loadedContent = loader.reload(this, content, metadata)
             val newMetadataMap =
-                metadataMap + loadedContent.metadata.childrenMetadata + (loadedContent.content to loadedContent.metadata)
+                    metadataMap + loadedContent.metadata.childrenMetadata + (loadedContent.content to loadedContent.metadata)
             finishedLoadingStartValidate(newMetadataMap)
         } catch (e: Exception) {
             phase = LoaderPhase.Error
