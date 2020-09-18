@@ -165,7 +165,7 @@ class ContentReference(private val contentPathValue: String) : ObjectDef, Valida
 }
 
 
-sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef, ValidationRequired {
+sealed class BaseFileAsset(val file: ContentPath) : ObjectDef, ValidationRequired {
 
     val name: String get() = fsPath.fileName.toString()
 
@@ -174,11 +174,22 @@ sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef,
     @JsonIgnore
     @Transient
     protected lateinit var loaderContext: LoaderContext
+    @Transient
+    internal lateinit var fsPath: Path
 
     override fun validate(loaderContext: LoaderContext, parent: LoadedContent<*>): String? {
         this.loaderContext = loaderContext
         container = loaderContext.contentByPath[file.parent()]
-            ?: return "Unable to find parent of file asset $file"
+          ?: return "Unable to find parent of file asset $file"
+        val containerMetadata = loaderContext.metadata[container]
+        // container fsPath resolves to index.yml, so take parent.
+        val fsPath = containerMetadata?.fsPath?.parent?.resolve(file.name)
+          ?: return "Unable to find metadata for $container and resolve ${file.name}"
+        if (!Files.exists(fsPath)) {
+            return "Unable to find file with path $file in $container ($fsPath)"
+        }
+        logger.debug("Found file $file in $fsPath (for ${containerMetadata?.fsPath})")
+        this.fsPath = fsPath
         return null
     }
 
@@ -195,7 +206,7 @@ sealed class BaseFileAsset(val file: ContentPath, val fsPath: Path) : ObjectDef,
     }
 }
 
-class FileAsset(file: ContentPath, fsPath: Path): BaseFileAsset(file, fsPath)
+class FileAsset(file: ContentPath): BaseFileAsset(file)
 
 enum class FillType {
     Fit,
@@ -249,7 +260,7 @@ data class TransformedPicture(
     val image: ResizedImage
 )
 
-class ImageAsset(file: ContentPath, fsPath: Path) : BaseFileAsset(file, fsPath) {
+class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
     val imageInfo: ImageInfo by lazy { parseImage() }
     val width by lazy { imageInfo.width }
     val height by lazy { imageInfo.height }
