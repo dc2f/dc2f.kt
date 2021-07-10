@@ -2,22 +2,34 @@ package com.dc2f.richtext.markdown
 
 import com.dc2f.*
 import com.dc2f.render.RenderContext
-import com.dc2f.richtext.*
-import com.dc2f.util.*
+import com.dc2f.richtext.RichText
+import com.dc2f.richtext.RichTextContext
+import com.dc2f.util.readString
+import com.dc2f.util.substringBefore
+import com.dc2f.util.toStringReflective
 import com.vladsch.flexmark.ext.admonition.AdmonitionExtension
-import com.vladsch.flexmark.ext.anchorlink.*
+import com.vladsch.flexmark.ext.anchorlink.AnchorLinkExtension
 import com.vladsch.flexmark.ext.enumerated.reference.EnumeratedReferenceExtension
-import com.vladsch.flexmark.ext.toc.*
+import com.vladsch.flexmark.ext.toc.TocExtension
 import com.vladsch.flexmark.ext.typographic.TypographicExtension
-import com.vladsch.flexmark.ext.xwiki.macros.*
-import com.vladsch.flexmark.html.*
+import com.vladsch.flexmark.ext.xwiki.macros.Macro
+import com.vladsch.flexmark.ext.xwiki.macros.MacroBlock
+import com.vladsch.flexmark.ext.xwiki.macros.MacroExtension
+import com.vladsch.flexmark.html.HtmlRenderer
+import com.vladsch.flexmark.html.HtmlWriter
+import com.vladsch.flexmark.html.IndependentLinkResolverFactory
+import com.vladsch.flexmark.html.LinkResolver
 import com.vladsch.flexmark.html.renderer.*
 import com.vladsch.flexmark.parser.Parser
-import com.vladsch.flexmark.util.ast.*
-import com.vladsch.flexmark.util.data.*
+import com.vladsch.flexmark.util.ast.Document
+import com.vladsch.flexmark.util.ast.Node
+import com.vladsch.flexmark.util.data.DataHolder
+import com.vladsch.flexmark.util.data.MutableDataHolder
+import com.vladsch.flexmark.util.data.MutableDataSet
+import com.vladsch.flexmark.util.data.NullableDataKey
 import com.vladsch.flexmark.util.html.Attributes
-import jodd.bean.BeanUtil
 import mu.KotlinLogging
+import org.apache.commons.beanutils.PropertyUtils
 import org.springframework.expression.spel.standard.SpelExpressionParser
 import java.nio.file.Path
 
@@ -76,7 +88,8 @@ class Dc2fLinkResolver(val context: LinkResolverBasicContext): LinkResolver {
                         require(loaderContext.phase == LoaderContext.LoaderPhase.Validating)
                         return link
                     }
-                    val obj = BeanUtil.pojo.getProperty<Any>(RichTextContext(renderContext.node, loaderContext, renderContext, null), link.url.substring(1))
+                    val obj = PropertyUtils.getNestedProperty(RichTextContext(renderContext.node, loaderContext, renderContext, null), link.url.substring(1))
+//                    val obj = BeanUtil.pojo.getProperty<Any>(RichTextContext(renderContext.node, loaderContext, renderContext, null), link.url.substring(1))
                     return link.withUrl(RichText.render(obj, renderContext)).withLinkType(LinkType.LINK).withStatus(
                         LinkStatus.VALID)
                 }
@@ -154,7 +167,9 @@ class MarkdownMacroRenderer(@Suppress("UNUSED_PARAMETER") options: DataHolder) :
             expr.getValue(context)
         }
 
-        val result: Any = BeanUtil.pojo.getProperty(context, contentPath)
+//        PropertyUtilsBean
+        val result = PropertyUtils.getNestedProperty(context, contentPath)
+//        val result: Any = BeanUtil.pojo.getProperty(context, contentPath)
         html.rawPre(RichText.render(result, renderContext, arguments))
     }
 

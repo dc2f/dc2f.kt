@@ -23,12 +23,16 @@ import com.fasterxml.jackson.module.mrbean.MrBeanModule
 import io.ktor.http.*
 import kotlinx.io.core.Closeable
 import mu.KotlinLogging
-import net.sf.cglib.proxy.Enhancer
-import net.sf.cglib.proxy.MethodInterceptor
-import net.sf.cglib.proxy.MethodProxy
+import net.bytebuddy.ByteBuddy
+import net.bytebuddy.implementation.InvocationHandlerAdapter
+import net.bytebuddy.matcher.ElementMatchers.any
+//import net.sf.cglib.proxy.Enhancer
+//import net.sf.cglib.proxy.MethodInterceptor
+//import net.sf.cglib.proxy.MethodProxy
 import org.apache.commons.lang3.builder.ReflectionToStringBuilder
 import org.apache.commons.lang3.builder.ToStringStyle
 import org.reflections.Reflections
+import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.nio.file.Files
 import java.nio.file.Path
@@ -594,41 +598,76 @@ class ContentLoader<T : ContentDef>(private val klass: KClass<T>) {
         } catch (e: Throwable) {
             throw Exception("Error while parsing $idxYml: ${e.message}", e)
         }
-        val enhancer = Enhancer()
-        enhancer.setSuperclass(obj.javaClass)
-        enhancer.setInterfaces(arrayOf(ProxyObjectDef::class.java))
-        enhancer.setCallback(object : MethodInterceptor {
-            var targetObject = obj
-            override fun intercept(
-                tmpObj: Any?,
-                method: Method?,
-                args: Array<out Any>?,
-                proxy: MethodProxy?
-            ): Any? {
-                @Suppress("UNCHECKED_CAST")
-                if (method?.name == "replace") {
-                    require(args != null)
-                    logger.debug { "Replacing targetObject." }
-                    targetObject = args[0] as T
-                    return null
-                } else if (method?.name == "dc2fGetTargetObject") {
-                    return targetObject
-                }
-                if (proxy == null) {
-                    logger.warn { "invoked with null proxy? weird. $method" }
-                    return null
-                }
-                if (method?.name == "equals") {
-                    val other = args?.first()
-                    if (tmpObj === other || targetObject === other) {
-                        return true
-                    }
-                }
-                return proxy.invoke(targetObject, args)
-            }
+        val proxyClass = ByteBuddy()
+          .subclass(obj.javaClass)
+          .implement(ProxyObjectDef::class.java)
+          .method(any())
+          .intercept(InvocationHandlerAdapter.of(object : InvocationHandler {
+              var targetObject = obj
+              override fun invoke(
+                proxy: Any?,
+                method: Method,
+                args: Array<out Any>?
+              ): Any? {
+                  @Suppress("UNCHECKED_CAST")
+                  if (method.name == "replace") {
+                      require(args != null)
+                      logger.debug { "Replacing targetObject." }
+                      targetObject = args[0] as T
+                      return null
+                  } else if (method.name == "dc2fGetTargetObject") {
+                      return targetObject
+                  }
+                  if (proxy == null) {
+                      logger.warn { "invoked with null proxy? weird. $method" }
+                      return null
+                  }
+                  if (method.name == "equals") {
+                      val other = args?.first()
+                      if (proxy === other || targetObject === other) {
+                          return true
+                      }
+                  }
+                  return method.invoke(targetObject, *(args ?: arrayOf()))
+              }
 
-        })
-        @Suppress("UNCHECKED_CAST") val objProxy = enhancer.create() as T
+          })).make().load(obj.javaClass.classLoader).loaded.getDeclaredConstructor();
+          val objProxy = proxyClass.newInstance()
+//        val enhancer = Enhancer()
+//        enhancer.setSuperclass(obj.javaClass)
+//        enhancer.setInterfaces(arrayOf(ProxyObjectDef::class.java))
+//        enhancer.setCallback(object : MethodInterceptor {
+//            var targetObject = obj
+//            override fun intercept(
+//                tmpObj: Any?,
+//                method: Method?,
+//                args: Array<out Any>?,
+//                proxy: MethodProxy?
+//            ): Any? {
+//                @Suppress("UNCHECKED_CAST")
+//                if (method?.name == "replace") {
+//                    require(args != null)
+//                    logger.debug { "Replacing targetObject." }
+//                    targetObject = args[0] as T
+//                    return null
+//                } else if (method?.name == "dc2fGetTargetObject") {
+//                    return targetObject
+//                }
+//                if (proxy == null) {
+//                    logger.warn { "invoked with null proxy? weird. $method" }
+//                    return null
+//                }
+//                if (method?.name == "equals") {
+//                    val other = args?.first()
+//                    if (tmpObj === other || targetObject === other) {
+//                        return true
+//                    }
+//                }
+//                return proxy.invoke(targetObject, args)
+//            }
+//
+//        })
+//        @Suppress("UNCHECKED_CAST") val objProxy = enhancer.create() as T
 //        Proxy.newProxyInstance(obj.javaClass.classLoader, arrayOf(obj.javaClass), )
         return LoadedContent(context, objProxy, ContentDefMetadata(
             contentPath,

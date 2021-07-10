@@ -136,7 +136,8 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$jacksonVersion")
     implementation("com.fasterxml.jackson.module:jackson-module-mrbean:$jacksonVersion")
 
-    implementation("cglib:cglib:3.2.12")
+//    implementation("cglib:cglib:3.2.12")
+    implementation("net.bytebuddy:byte-buddy:1.11.6")
 
 //    compile("org.hibernate.validator:hibernate-validator:6.0.14.Final")
 //    implementation("org.glassfish:javax.el:3.0.1-b09")
@@ -167,7 +168,8 @@ dependencies {
 
     // content parsers
     implementation("com.vladsch.flexmark:flexmark-all:0.61.14")
-    implementation("org.jodd:jodd-bean:5.1.4") // for resolving paths
+//    implementation("org.jodd:jodd-bean:5.1.4") // for resolving paths
+    implementation("commons-beanutils:commons-beanutils:1.9.4")
     implementation("com.github.spullara.mustache.java:compiler:0.9.6")
     implementation("io.pebbletemplates:pebble:3.0.8")
     implementation("org.springframework:spring-expression:5.1.5.RELEASE") // right now only used to parse "arguments" from markdown
