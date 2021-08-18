@@ -51,7 +51,7 @@ publishing {
                 licenses {
                     license {
                         name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
                     }
                 }
                 developers {
@@ -62,7 +62,7 @@ publishing {
                     }
                 }
                 scm {
-                    connection.set("scm:git:http://github.com/dc2f/dc2f.kt.git")
+                    connection.set("scm:git:https://github.com/dc2f/dc2f.kt.git")
                     developerConnection.set("scm:git:ssh://github.com/dc2f/dc2f.kt.git")
                     url.set("https://github.com/dc2f/dc2f.kt")
                 }
@@ -109,9 +109,8 @@ tasks.named<Test>("test") {
 
 
 repositories {
-    // Use jcenter for resolving your dependencies.
-    // You can declare any Maven/Ivy/file repository here.
-    jcenter()
+    // Use mavenCentral for resolving your dependencies.
+    mavenCentral()
 }
 
 dependencies {
@@ -125,7 +124,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.1")
 
     // annoying image stuff
-    implementation("net.coobird:thumbnailator:0.4.8")
+    implementation("net.coobird:thumbnailator:0.4.14")
 
     // yaml deserialize
     compile("com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion")
@@ -175,7 +174,7 @@ dependencies {
     implementation("org.springframework:spring-expression:5.1.5.RELEASE") // right now only used to parse "arguments" from markdown
 
     // render/"templating"
-    compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.6.12")
+    compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
     // preprocessors
     implementation("io.bit3:jsass:5.10.1")
 

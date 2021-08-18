@@ -8,7 +8,6 @@ import mu.KotlinLogging
 import net.coobird.thumbnailator.Thumbnails
 import net.coobird.thumbnailator.geometry.Positions
 import net.coobird.thumbnailator.tasks.io.FileImageSink
-import org.apache.batik.util.MimeTypeConstants
 import org.ehcache.Cache
 import org.ehcache.config.builders.*
 import org.ehcache.config.units.*
@@ -17,6 +16,8 @@ import java.lang.annotation.Inherited
 import java.nio.file.*
 import java.util.*
 import javax.imageio.ImageIO
+import kotlin.math.max
+import kotlin.math.min
 
 private val logger = KotlinLogging.logger {}
 
@@ -188,7 +189,7 @@ sealed class BaseFileAsset(val file: ContentPath) : ObjectDef, ValidationRequire
         if (!Files.exists(fsPath)) {
             return "Unable to find file with path $file in $container ($fsPath)"
         }
-        logger.debug("Found file $file in $fsPath (for ${containerMetadata?.fsPath})")
+        logger.debug("Found file $file in $fsPath (for ${containerMetadata.fsPath})")
         this.fsPath = fsPath
         return null
     }
@@ -323,20 +324,21 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
         //        2.) if because of some reason there is a cache entry, but no resized file, we have to resize it again.
         val cacheKey = ImageResizeCacheKey(file.toString(), fileSize, width, height, fillType.name, targetFormatName)
         val cachedData = imageCache().imageResizeCache.get(cacheKey)
-            ?: {
+            ?: run {
                 logger.info { "Image not found in cache. need to recompute $cacheKey" }
                 val original = ImageIO.read(fsPath.toFile())
                 val thumbnails = Thumbnails.of(original)
                 when (fillType) {
                     FillType.Cover -> thumbnails.size(width, height).crop(Positions.CENTER)
-                    FillType.Fit -> thumbnails.size(width, height)
+                    FillType.Fit -> thumbnails.size(
+                        min(width, original.width),
+                        min(height, original.height)
+                    )
                     FillType.Transform -> thumbnails.forceSize(width, height)
                     FillType.NoResize -> thumbnails.scale(1.0)
                 }
                 val thumbnailImage = thumbnails.asBufferedImage()
-
                 val cachedFileName = "${file.name}.${UUID.randomUUID()}.${file.name}"
-
                 val sink = FileImageSink(cachePath.resolve(cachedFileName).toFile())
                 if (targetFormatName != null) {
                     sink.setOutputFormatName(targetFormatName)
@@ -345,10 +347,9 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
                 if (sink.sink.name != cachedFileName) {
                     logger.info { "written output file ${sink.sink.name} differs from cachedFileName $cachedFileName" }
                 }
-
                 ImageResizeCacheData(sink.sink.name, thumbnailImage.width, thumbnailImage.height)
                     .also { imageCache().imageResizeCache.put(cacheKey, it) }
-            }()
+            }
 
         val renderPath = context.storeInParentContent(cachePath.resolve(cachedData.cachedFileName), container, fileName)
 //        if (!Files.exists(targetPath)) {
