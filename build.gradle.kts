@@ -161,7 +161,7 @@ dependencies {
     compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
     compile("org.apache.xmlgraphics:batik-transcoder:1.10")
     compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
-    compile("org.sejda.imageio:webp-imageio:0.1.1")
+//    compile("com.twelvemonkeys.imageio:imageio-webp:3.13.0") // WEBP support
     implementation("com.ibm.icu:icu4j:63.1")
 
 
@@ -176,7 +176,7 @@ dependencies {
     // render/"templating"
     compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
     // preprocessors
-    implementation("io.bit3:jsass:5.10.1")
+    implementation("io.bit3:jsass:5.11.1")
 
     // caching
     implementation("org.ehcache:ehcache:3.6.1")

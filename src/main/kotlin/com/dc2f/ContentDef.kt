@@ -292,11 +292,16 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
                 )
             }
             val image = resize(context, width, height, fillType)
-            val webp = resize(context, width, height, fillType, "webp")
+            val jpg = resize(context, width, height, fillType, "jpg")
             return TransformedPicture(
-                listOf(TransformedPictureSource(webp.href, "image/webp")),
+                listOf(TransformedPictureSource(jpg.href, "image/jpeg")),
                 image
             )
+//            val webp = resize(context, width, height, fillType, "webp")
+//            return TransformedPicture(
+//                listOf(TransformedPictureSource(webp.href, "image/webp")),
+//                image
+//            )
         } catch (e: Exception) {
             throw RuntimeException("Error while resizing/converting image $this ($width, $height, $fillType)", e)
         }

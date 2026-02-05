@@ -1,8 +1,8 @@
 package com.dc2f.util
 
 import com.dc2f.*
+import org.apache.commons.lang3.StringEscapeUtils
 import org.apache.commons.lang3.builder.*
-import org.apache.commons.text.StringEscapeUtils
 import java.nio.file.Path
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.isAccessible
