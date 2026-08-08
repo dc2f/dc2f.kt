@@ -104,8 +104,10 @@ tasks.withType<KotlinCompile> {
     // sourceCompatibility dropped: KotlinCompile stopped extending AbstractCompile
     // in Kotlin 1.9, and it was a no-op here regardless (no Java sources).
     kotlinOptions.jvmTarget = "1.8"
-    // "enable" was removed in Kotlin 1.5; "all" is the closest equivalent.
-    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all")
+    // "enable" was removed in Kotlin 1.5. "all-compatibility" rather than
+    // "all": this is a published library, and it keeps emitting the DefaultImpls
+    // bridges that already-compiled consumers link against.
+    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
 }
 
 tasks.named<Test>("test") {
@@ -192,13 +194,23 @@ dependencies {
     implementation("org.ehcache:ehcache:3.6.1")
     api("org.ehcache:ehcache:3.6.1")
 
-    // Use the Kotlin test library
+    // Use the Kotlin test library. From Kotlin 1.9 this picks its own framework
+    // variant from the Test task -- useJUnitPlatform() above means it resolves
+    // to kotlin-test-junit5. Declaring kotlin-test-junit (JUnit 4) alongside it
+    // made both claim the kotlin-test-framework-impl capability and resolution
+    // failed outright, so the JUnit 4 integration is gone; this project runs
+    // JUnit 5.
     testImplementation("org.jetbrains.kotlin:kotlin-test")
 
-    // Use the Kotlin JUnit integration
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.1.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.1.0")
+
+    // The suite is mixed: some tests import org.junit.Test (JUnit 4), others
+    // org.junit.jupiter.api.Test. JUnit 4 used to arrive transitively via
+    // kotlin-test-junit; declared directly now, with the vintage engine so the
+    // platform still runs those tests.
+    testImplementation("junit:junit:4.13.2")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.1.0")
 
     testImplementation("io.mockk:mockk:1.9.3")
     testImplementation("com.willowtreeapps.assertk:assertk-jvm:0.13")

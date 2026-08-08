@@ -30,7 +30,11 @@ class MarkdownTest {
             .apply {
                 validate(
                     mockRenderContext(LoaderContext.LoaderPhase.Validating).renderer.loaderContext,
-                    mockk<LoadedContent<ContentDef>>())
+                    // relaxed: under -Xjvm-default=all the interface members
+                    // validate() reaches compile to real default methods, so
+                    // this mock now receives calls (getContent()) that a strict
+                    // mock rejects. Matches mockRenderContext above.
+                    mockk<LoadedContent<ContentDef>>(relaxed = true))
             }
 
     private fun assertMarkdown(expected: String, source: String, asInlineContent: Boolean = false) =
