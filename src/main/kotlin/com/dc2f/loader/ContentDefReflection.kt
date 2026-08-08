@@ -128,8 +128,11 @@ class ContentDefReflection<T : ContentDef>(@JsonIgnore val klass: KClass<T>) {
                         prop.isMultiValue
                     )
                 } else if (elementJavaClass.isEnum) {
-                    logger.debug("$elementJavaClass is an enum. ${elementJavaClass is Enum<*>} vs. ${elementJavaClass.kotlin is Enum<*>}")
-//                    logger.debug("$elementJavaClass is an enum. ${elementJavaClass is Enum<*>} vs. ${elementJavaClass.kotlin is Enum<*>}")
+                    // The two `is Enum<*>` checks this used to log were always
+                    // false -- a Class and a KClass are never Enum instances --
+                    // which Kotlin 2.x reports as an error rather than a
+                    // warning. isEnum above is the real check.
+                    logger.debug("$elementJavaClass is an enum.")
 
                     ContentDefPropertyReflectionEnum(
                         prop.name,

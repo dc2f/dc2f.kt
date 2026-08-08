@@ -9,16 +9,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    # JDK 11, not 8: webp-imageio (the WebP encoder with aarch64 natives) ships
-    # Java 9 bytecode, so resolution fails outright on a Java 8 consumer with
-    # "no matching variant". 11 is also what the sites build with locally.
-    # kotlinOptions.jvmTarget stays 1.8 -- that is the output target, unrelated
-    # to the JDK doing the compiling.
-    - name: Set up JDK 11
+    # JDK 17: required by Gradle 9, and matches the jvmToolchain(17) the build
+    # now declares. (It was 8 until webp-imageio, which ships Java 9 bytecode,
+    # made resolution fail with "no matching variant".)
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         distribution: temurin
-        java-version: '11'
+        java-version: '17'
     - name: Postdeploy
       env:
         BLACKBOX_SECRET: ${{ secrets.BLACKBOX_SECRET }}

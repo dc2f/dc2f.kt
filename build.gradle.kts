@@ -10,7 +10,7 @@ if (version == "unspecified") {
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
-    kotlin("jvm") version "1.9.25"
+    kotlin("jvm") version "2.4.10"
     // Provides api(), which replaces the compile() configuration that the
     // Kotlin plugin used to register and dropped in 1.9.
     `java-library`
@@ -103,11 +103,22 @@ signing {
 tasks.withType<KotlinCompile> {
     // sourceCompatibility dropped: KotlinCompile stopped extending AbstractCompile
     // in Kotlin 1.9, and it was a no-op here regardless (no Java sources).
-    kotlinOptions.jvmTarget = "1.8"
-    // "enable" was removed in Kotlin 1.5. "all-compatibility" rather than
-    // "all": this is a published library, and it keeps emitting the DefaultImpls
-    // bridges that already-compiled consumers link against.
-    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
+    // kotlinOptions was removed in Kotlin 2.2; compilerOptions replaces it,
+    // and -Xjvm-default became -jvm-default. "enable" is the equivalent of the
+    // old "all-compatibility": it still emits the DefaultImpls bridges that
+    // already-compiled consumers of this published library link against.
+    compilerOptions {
+        freeCompilerArgs.add("-jvm-default=enable")
+    }
+}
+
+// Pins both the Java and Kotlin targets together. Setting only
+// compilerOptions.jvmTarget lets compileJava follow whatever JDK is running and
+// Gradle then rejects the mismatch. Gradle 9 requires JDK 17 to run anyway, and
+// dc2f already depends on a Java 9 artifact (webp-imageio), so the old
+// jvmTarget of 1.8 was fiction.
+kotlin {
+    jvmToolchain(17)
 }
 
 tasks.named<Test>("test") {

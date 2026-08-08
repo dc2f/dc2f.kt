@@ -172,7 +172,10 @@ class LazyFileRenderOutput(val filePath: Path) : RenderOutput() {
     }
 
     override fun appendln(string: String) {
-        writer.appendln(string)
+        // Appendable.appendln is an error-level deprecation from Kotlin 2.x.
+        // appendLine always emits '\n' rather than the platform separator,
+        // which is what we want for generated HTML anyway.
+        writer.appendLine(string)
     }
 
     override fun append(string: String) { writer.append(string) }
@@ -187,7 +190,7 @@ class LazyFileRenderOutput(val filePath: Path) : RenderOutput() {
 }
 
 class AppendableOutput(val appendable: Appendable) : RenderOutput() {
-    override fun appendln(string: String) { appendable.appendln(string) }
+    override fun appendln(string: String) { appendable.appendLine(string) }
     override fun append(string: String) { appendable.append(string) }
     override fun appendHTML(): TagConsumer<Appendable> = appendable.appendHTML()
     override fun close() {}
