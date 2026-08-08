@@ -11,6 +11,9 @@ if (version == "unspecified") {
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
     kotlin("jvm") version "1.9.25"
+    // Provides api(), which replaces the compile() configuration that the
+    // Kotlin plugin used to register and dropped in 1.9.
+    `java-library`
     `maven-publish`
     signing
 }
@@ -129,8 +132,8 @@ dependencies {
     implementation("net.coobird:thumbnailator:0.4.14")
 
     // yaml deserialize
-    compile("com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion")
-    compile("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
+    api("com.fasterxml.jackson.core:jackson-annotations:$jacksonVersion")
+    api("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:$jacksonVersion")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:$jacksonVersion")
@@ -146,29 +149,29 @@ dependencies {
     // utils
     implementation("org.apache.commons:commons-lang3:3.8.1")
     implementation("org.reflections:reflections:0.9.11")
-    compile("com.google.guava:guava:27.0.1-jre")
+    api("com.google.guava:guava:27.0.1-jre")
 
     implementation("io.ktor:ktor-http-jvm:1.1.2") // mainly for UrlBuilder
     implementation("io.ktor:ktor-http:1.1.2") // mainly for UrlBuilder
 
     // google sitemap generator
-    compile("com.github.dfabulich:sitemapgen4j:1.1.2")
+    api("com.github.dfabulich:sitemapgen4j:1.1.2")
 
     // git support for geting last modified date.
     implementation("org.eclipse.jgit:org.eclipse.jgit:5.2.1.201812262042-r")
 
     // image io for reading images - jpeg support, bmp: ico support
-    compile("com.twelvemonkeys.imageio:imageio-jpeg:3.4.1")
-    compile("com.twelvemonkeys.imageio:imageio-bmp:3.4.1")
-    compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
-    compile("org.apache.xmlgraphics:batik-transcoder:1.10")
-    compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
+    api("com.twelvemonkeys.imageio:imageio-jpeg:3.4.1")
+    api("com.twelvemonkeys.imageio:imageio-bmp:3.4.1")
+    api("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
+    api("org.apache.xmlgraphics:batik-transcoder:1.10")
+    api("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
     // WEBP support. Fork of the same luciad codebase org.sejda.imageio used,
     // but with aarch64 natives -- sejda 0.1.1 shipped mac/64 (x86_64) only,
     // which is why it had to go. TwelveMonkeys' imageio-webp is decode-only
     // and cannot replace this. 0.8.0 is the newest release whose kotlin-stdlib
     // (1.9.22) still matches our Kotlin.
-    compile("com.github.usefulness:webp-imageio:0.8.0")
+    api("com.github.usefulness:webp-imageio:0.8.0")
     implementation("com.ibm.icu:icu4j:63.1")
 
 
@@ -181,13 +184,13 @@ dependencies {
     implementation("org.springframework:spring-expression:5.1.5.RELEASE") // right now only used to parse "arguments" from markdown
 
     // render/"templating"
-    compile("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
+    api("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
     // preprocessors
     implementation("io.bit3:jsass:5.11.1")
 
     // caching
     implementation("org.ehcache:ehcache:3.6.1")
-    compile("org.ehcache:ehcache:3.6.1")
+    api("org.ehcache:ehcache:3.6.1")
 
     // Use the Kotlin test library
     testImplementation("org.jetbrains.kotlin:kotlin-test")
