@@ -2,8 +2,8 @@ package com.dc2f
 
 import assertk.assertThat
 import assertk.assertions.*
-import org.junit.Test
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 
 internal class ContentPathTest {
 

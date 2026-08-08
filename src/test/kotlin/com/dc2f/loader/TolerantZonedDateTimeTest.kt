@@ -5,7 +5,7 @@ import assertk.assertions.isEqualTo
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.module.mrbean.MrBeanModule
-import org.junit.Test
+import org.junit.jupiter.api.Test
 import java.time.ZonedDateTime
 import java.time.temporal.*
 

@@ -195,22 +195,12 @@ dependencies {
     api("org.ehcache:ehcache:3.6.1")
 
     // Use the Kotlin test library. From Kotlin 1.9 this picks its own framework
-    // variant from the Test task -- useJUnitPlatform() above means it resolves
-    // to kotlin-test-junit5. Declaring kotlin-test-junit (JUnit 4) alongside it
-    // made both claim the kotlin-test-framework-impl capability and resolution
-    // failed outright, so the JUnit 4 integration is gone; this project runs
-    // JUnit 5.
+    // variant from the Test task, so useJUnitPlatform() above resolves it to
+    // kotlin-test-junit5 and kotlin.test.Test aliases the JUnit 5 annotation.
     testImplementation("org.jetbrains.kotlin:kotlin-test")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.1.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.1.0")
-
-    // The suite is mixed: some tests import org.junit.Test (JUnit 4), others
-    // org.junit.jupiter.api.Test. JUnit 4 used to arrive transitively via
-    // kotlin-test-junit; declared directly now, with the vintage engine so the
-    // platform still runs those tests.
-    testImplementation("junit:junit:4.13.2")
-    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.1.0")
 
     testImplementation("io.mockk:mockk:1.9.3")
     testImplementation("com.willowtreeapps.assertk:assertk-jvm:0.13")
