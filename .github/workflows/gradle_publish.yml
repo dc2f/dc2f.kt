@@ -17,5 +17,13 @@ jobs:
       env:
         BLACKBOX_SECRET: ${{ secrets.BLACKBOX_SECRET }}
       run: _tools/postdeploy.sh
-    - name: Test and publish with Gradle
-      run: ./gradlew test publish
+    # `publish` dropped: it targeted oss.sonatype.org, which Sonatype
+    # decommissioned when OSSRH reached EOL on 2025-06-30 -- both endpoints now
+    # return 404/402, so this step could never succeed and had been failing
+    # every run. Nothing has been published since 2019 and every consumer
+    # (codeux.design, authpass.app-website) resolves dc2f via includeBuild, so
+    # CI is more useful just running the tests. Republishing would mean
+    # migrating to the Central Portal and untangling the version numbering
+    # first -- dc2f.kt declares 0.1.3-SNAPSHOT while 0.2.1 is already on Central.
+    - name: Test with Gradle
+      run: ./gradlew test
