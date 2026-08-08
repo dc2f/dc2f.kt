@@ -10,7 +10,7 @@ if (version == "unspecified") {
 
 plugins {
     // Apply the Kotlin JVM plugin to add support for Kotlin on the JVM
-    kotlin("jvm") version "1.4.0"
+    kotlin("jvm") version "1.9.25"
     `maven-publish`
     signing
 }
@@ -98,9 +98,11 @@ signing {
 }
 
 tasks.withType<KotlinCompile> {
-    sourceCompatibility = "1.8"
+    // sourceCompatibility dropped: KotlinCompile stopped extending AbstractCompile
+    // in Kotlin 1.9, and it was a no-op here regardless (no Java sources).
     kotlinOptions.jvmTarget = "1.8"
-    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
+    // "enable" was removed in Kotlin 1.5; "all" is the closest equivalent.
+    kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all")
 }
 
 tasks.named<Test>("test") {
@@ -161,7 +163,12 @@ dependencies {
     compile("org.apache.xmlgraphics:batik-codec:1.10") // required for SVG-inline png support.
     compile("org.apache.xmlgraphics:batik-transcoder:1.10")
     compile("com.twelvemonkeys.imageio:imageio-batik:3.4.1") // SVG support
-//    compile("com.twelvemonkeys.imageio:imageio-webp:3.13.0") // WEBP support
+    // WEBP support. Fork of the same luciad codebase org.sejda.imageio used,
+    // but with aarch64 natives -- sejda 0.1.1 shipped mac/64 (x86_64) only,
+    // which is why it had to go. TwelveMonkeys' imageio-webp is decode-only
+    // and cannot replace this. 0.8.0 is the newest release whose kotlin-stdlib
+    // (1.9.22) still matches our Kotlin.
+    compile("com.github.usefulness:webp-imageio:0.8.0")
     implementation("com.ibm.icu:icu4j:63.1")
 
 

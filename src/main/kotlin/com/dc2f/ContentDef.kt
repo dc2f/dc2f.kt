@@ -74,20 +74,16 @@ class Slug private constructor(private val value: String) : ObjectDef, Validatio
 interface SlugCustomization {
     val slug: Slug?
 
-    @JvmDefault
     fun slugGenerationValue(): String? = null
 
-    @JvmDefault
     fun createSlug() = slug?.slug ?: slugGenerationValue()?.let { Slugify().slugify(it) }
 }
 
 interface WithRenderPathOverride {
-    @JvmDefault
     fun renderPath(renderer: Renderer): RenderPath? = null
 }
 
 interface WithRenderPathAliases {
-    @JvmDefault
     fun renderPathAliases(renderer: Renderer): List<RenderPath>? = null
 }
 
@@ -99,19 +95,16 @@ interface WithRenderPathAliases {
  * location of this node.
  */
 interface WithContentSymlink {
-    @JvmDefault
     fun contentSymlink(): ContentDef? = null
 }
 
 interface WithUriReferencePathOverride {
-    @JvmDefault
     fun uriReferencePath(renderer: Renderer): UriReferencePath? = null
 }
 
 interface WithRedirect : WithUriReferencePathOverride {
     val redirect: ContentReference?
 
-    @JvmDefault
     override fun uriReferencePath(renderer: Renderer) =
         redirect?.let { renderer.findUriReferencePath(it.referencedContent) }
 }
@@ -292,16 +285,11 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
                 )
             }
             val image = resize(context, width, height, fillType)
-            val jpg = resize(context, width, height, fillType, "jpg")
+            val webp = resize(context, width, height, fillType, "webp")
             return TransformedPicture(
-                listOf(TransformedPictureSource(jpg.href, "image/jpeg")),
+                listOf(TransformedPictureSource(webp.href, "image/webp")),
                 image
             )
-//            val webp = resize(context, width, height, fillType, "webp")
-//            return TransformedPicture(
-//                listOf(TransformedPictureSource(webp.href, "image/webp")),
-//                image
-//            )
         } catch (e: Exception) {
             throw RuntimeException("Error while resizing/converting image $this ($width, $height, $fillType)", e)
         }

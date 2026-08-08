@@ -10,7 +10,6 @@ import java.time.Instant
 import java.util.*
 
 interface WithSitemapInfo {
-    @JvmDefault
     fun includeInSitemap() = true
 
     @get:JsonIgnore
