@@ -15,6 +15,10 @@ class StringConstantRenderable(val content: String) : Renderable {
 @Suppress("unused")
 class MockContent(val foobar: Any) : ContentDef
 
+/** Stands in for the root node, which is reached as `rootNode.embed.…`. */
+@Suppress("unused")
+class MockRoot(val embed: Any) : ContentDef
+
 class MarkdownTest {
 
     // TODO this is just fucked up. we should make those whole context stuff more easily testable.
@@ -60,6 +64,12 @@ class MarkdownTest {
     @Test
     fun simpleMacroRenderDeep() {
         every { renderContext.node } returns MockContent(StringConstantRenderable("CONSTANT STUFF"))
+        // Stub rootNode itself, not contentByPath: loaderContext is a mock, so
+        // its `rootNode` getter never runs and relaxed mode just hands back a
+        // bare ContentDef mock with no `embed` -- beanutils then fails with
+        // "Unknown property 'embed'".
+        every { renderContext.renderer.loaderContext.rootNode } returns
+            MockRoot(MockContent(StringConstantRenderable("CONSTANT STUFF")))
         assertMarkdown(
             "<p>test render CONSTANT STUFF</p>",
             "test render {{render content=rootNode.embed.foobar/}}"
@@ -84,7 +94,12 @@ class MarkdownTest {
 
     @Test
     fun linkTest() {
-        debugMarkdown("Lorem [label](/link)")
+        // Not debugMarkdown(): that renders with a bare Markdown.options, so
+        // link resolution hits requireNotNull(LOADER_CONTEXT) and throws
+        // "Required value was null". Internal links need a loader context, so
+        // go through the mocked one like the other render tests.
+        val html = markdown("Lorem [label](/link)").renderedContent(renderContext)
+        assertTrue(html.contains("label"), "expected the link label in: $html")
     }
 
     @Test
