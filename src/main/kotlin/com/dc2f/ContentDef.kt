@@ -300,7 +300,8 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
         width: Int,
         height: Int,
         fillType: FillType,
-        targetFormatName: String? = null
+        targetFormatName: String? = null,
+        absoluteUri: Boolean = false
     ): ResizedImage {
 //        if (context !is FileRenderContext) {
 //            logger.warn { "We are not rendering to file system. can't resize image." }
@@ -354,7 +355,7 @@ class ImageAsset(file: ContentPath) : BaseFileAsset(file) {
 //        thumbnails.toFile(targetPath.toFile())
 //        thumbnails.addFilter()
         return ResizedImage(
-            context.renderer.href(renderPath),
+            context.renderer.href(renderPath, absoluteUri),
 //            "/$renderPath",
             cachedData.width,
             cachedData.height
