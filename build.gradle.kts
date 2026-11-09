@@ -4,8 +4,14 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 val jacksonVersion = "2.9.9"
 
 group = "com.dc2f"
+// One number across dc2f.kt, dc2f-common and dc2f-edit-api: the two siblings
+// depend on this module at their own `$version`, so a release only resolves if
+// all three carry the same one. Central has had 0.2.1 since 2019 while the three
+// repositories declared 0.1.3-SNAPSHOT, 0.0.2 and 0.0.2 locally, so 0.3.0 is the
+// first number unambiguously ahead of what is published.
+// A release overrides this: `./gradlew publish -Pversion=0.3.0`.
 if (version == "unspecified") {
-    version = "0.1.3-SNAPSHOT"
+    version = "0.3.0-SNAPSHOT"
 }
 
 plugins {
@@ -75,13 +81,32 @@ publishing {
     }
     repositories {
         maven {
-            val releasesRepoUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-            val snapshotsRepoUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
+            name = "central"
+            // OSSRH was decommissioned on 2025-06-30 and both of its hosts now
+            // return 404. For a hand-rolled maven-publish setup like this one,
+            // Sonatype's replacement is the OSSRH Staging API in front of the
+            // Central Portal: the same deploy layout, authenticated with a
+            // Central Portal user token instead of the old OSSRH password.
+            //
+            // A release uploaded here is staged and does NOT appear in the
+            // Portal until _tools/central-publish.sh posts it -- from the same
+            // IP that uploaded, which is why that script runs in the same job.
+            val releasesRepoUrl = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
+            val snapshotsRepoUrl = "https://central.sonatype.com/repository/maven-snapshots/"
             url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
             println("using $url")
             credentials {
-                username = project.properties["ossrhUsername"] as? String
-                password = project.properties["ossrhPassword"] as? String
+                // The token generated at central.sonatype.com, by property or by
+                // environment. The ossrh* names stay as a fallback so the
+                // encrypted build_secrets.gradle.kts keeps working once its
+                // values are replaced with a Portal token -- the old OSSRH
+                // credentials themselves are rejected with 401.
+                username = (project.findProperty("centralUsername")
+                    ?: System.getenv("CENTRAL_TOKEN_USERNAME")
+                    ?: project.findProperty("ossrhUsername")) as? String
+                password = (project.findProperty("centralPassword")
+                    ?: System.getenv("CENTRAL_TOKEN_PASSWORD")
+                    ?: project.findProperty("ossrhPassword")) as? String
             }
 
         }
@@ -97,6 +122,14 @@ publishing {
 }
 
 signing {
+    // In CI there is no gpg keyring and no decrypted build_secrets.gradle.kts;
+    // the armoured private key arrives in SIGNING_KEY instead. Locally the
+    // signing.* properties from build_secrets.gradle.kts still drive gpg as
+    // they always have.
+    val signingKey = System.getenv("SIGNING_KEY")
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, System.getenv("SIGNING_PASSWORD"))
+    }
     sign(publishing.publications["mavenCentralJava"])
 }
 
