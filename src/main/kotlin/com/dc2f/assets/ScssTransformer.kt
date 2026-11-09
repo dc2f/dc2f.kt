@@ -3,8 +3,8 @@ package com.dc2f.assets
 import com.dc2f.render.RenderCharAsset
 import com.google.common.hash.Hashing
 import com.google.common.io.CharSource
-import io.bit3.jsass.*
-import io.bit3.jsass.importer.*
+import de.larsgrefer.sass.embedded.SassCompilerFactory
+import de.larsgrefer.sass.embedded.importer.FileImporter
 import mu.KotlinLogging
 import java.io.*
 import java.nio.file.*
@@ -61,40 +61,19 @@ class ScssTransformer(
         return RenderCharAsset(
             object : CharSource() {
                 override fun openStream(): Reader {
-                    val compiler = Compiler()
-                    val options = Options()
-                    options.importers.add(object : Importer {
-                        override fun apply(url: String, previous: Import?): MutableCollection<Import>? {
-                            logger.debug { "should import $url ($previous)" }
-                            if (url.startsWith('~')) {
-                                val relative = url.substring(1)
-                                val nodeModules = modulesBasePath
-                                val path = sequenceOf("", ".scss", ".sass", ".css")
-                                    .map { relative + it }
-                                    .map { nodeModules.resolve(it) }
-                                    .tap { logger.debug { "Exists? ${it.toAbsolutePath()}" } }
-                                    .firstOrNull { Files.exists(it) } ?: return null
-                                logger.info { "Resolved $url to $path (${path.toUri()} // ${path.toAbsolutePath().toUri()}" }
-//                                return mutableListOf(Import(URI(url), path.toAbsolutePath().toUri(), path.readString()))
-//                                return mutableListOf(Import(path.toUri(), path.toAbsolutePath().toUri()))
-                                return mutableListOf(
-                                    Import(
-                                        path.toUri(),
-                                        path.toAbsolutePath().toUri(),
-                                        """@import '$path'; """
-                                    )
-                                )
-                            }
-                            return null
-                        }
-
-                    })
-                    options.includePaths.addAll(includePaths)
-
-                    val result = compiler.compileString(input.contentReader.read(), options)
+                    // One compiler per stylesheet. `bundled()` starts the dart-sass
+                    // process that ships inside sass-embedded-bundled, and that
+                    // process carries the load paths and importer registered on it,
+                    // so it cannot be shared across concurrent transforms. A site
+                    // has a handful of stylesheets, which makes the startup cost
+                    // irrelevant next to the correctness of not sharing state.
+                    val css = SassCompilerFactory.bundled().use { compiler ->
+                        compiler.loadPaths = compiler.loadPaths + includePaths
+                        compiler.registerImporter(NodeModulesImporter(modulesBasePath))
+                        compiler.compileScssString(input.contentReader.read()).css
+                    }
                     // TODO do something with the source map?
-                    return StringReader(result.css)
-//                    val result = compiler.compileFile(input, output, options)
+                    return StringReader(css)
                 }
 
             },
@@ -111,8 +90,27 @@ class ScssTransformer(
 //    }
 }
 
-private fun <T> Sequence<T>.tap(cb: (T) -> Unit): Sequence<T> =
-    map {
-        cb(it)
-        it
+/**
+ * Resolves `~`-prefixed imports -- the webpack convention for "look in the module
+ * directory" -- out of [modulesBasePath]. Anything else is left to the compiler's
+ * own load paths.
+ *
+ * This is a [FileImporter] rather than an importer that answers with the file's
+ * contents: handing dart-sass the file itself means imports *inside* that file are
+ * resolved by sass relative to it, partials and index files included. An importer
+ * that returns contents owns that resolution too, and bulma alone imports about
+ * forty further files.
+ */
+private class NodeModulesImporter(private val modulesBasePath: Path) : FileImporter() {
+    override fun handleImport(url: String, fromImport: Boolean): File? {
+        if (!url.startsWith('~')) {
+            return null
+        }
+        val relative = url.substring(1)
+        val path = sequenceOf("", ".scss", ".sass", ".css")
+            .map { modulesBasePath.resolve(relative + it) }
+            .firstOrNull { Files.exists(it) }
+        logger.debug { "Resolved $url to $path" }
+        return path?.toAbsolutePath()?.toFile()
     }
+}

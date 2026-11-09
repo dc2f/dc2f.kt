@@ -199,7 +199,11 @@ dependencies {
     // render/"templating"
     api("org.jetbrains.kotlinx:kotlinx-html-jvm:0.7.3")
     // preprocessors
-    implementation("io.bit3:jsass:5.11.1")
+    // jsass wraps libsass, which was deprecated in 2020 and never learned the
+    // sass module system -- it passes `@use` through as an unknown at-rule and
+    // compiles a stylesheet with nothing in it. sass-embedded-host speaks the
+    // embedded protocol to the real dart-sass binary.
+    implementation("de.larsgrefer.sass:sass-embedded-host:4.2.0")
 
     // caching
     implementation("org.ehcache:ehcache:3.6.1")
