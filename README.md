@@ -35,6 +35,44 @@ Not sure yet, you tell me. Just call it dc2f for now.
 * Paging
 * Different renderings for different output formats(?)
 
+## Secrets
+
+The signing key credentials and the Maven Central Portal token live under
+`_tools/secrets/`, encrypted with [sops](https://github.com/getsops/sops) to the
+age recipients listed in `.sops.yaml`. They are a second, CI-independent copy of
+values that are also GitHub repository secrets, so a release stays possible when
+GitHub is not.
+
+```bash
+# write _tools/secrets/build_secrets.gradle.kts (gitignored), which
+# build.gradle.kts applies as a Gradle script; CI runs this before ./gradlew
+_tools/postdeploy.sh
+
+# read one of the by-hand files
+sops -d --output-type binary _tools/secrets/signing_key_passphrase.txt.sops.json
+sops -d --output-type binary _tools/secrets/central_portal_token.txt.sops.json
+
+# change a secret: decrypt, edit, encrypt back
+_tools/postdeploy.sh
+$EDITOR _tools/secrets/build_secrets.gradle.kts
+_tools/secrets-encrypt.sh _tools/secrets/build_secrets.gradle.kts
+
+# after editing the recipients in .sops.yaml
+sops updatekeys _tools/secrets/build_secrets.gradle.kts.sops.json
+```
+
+Decrypting needs an age identity: yours in the sops age key file locally, or the
+`SOPS_AGE_KEY` repository secret in CI. On macOS sops looks for that file under
+`~/Library/Application Support/sops/age/keys.txt`, not the `~/.config` path the
+age documentation uses; `_tools/postdeploy.sh` accepts either.
+
+This replaced blackbox and GPG in November 2026. The reason was not taste: the
+CI GPG admin key had expired in 2021, GnuPG refuses an expired key as a
+recipient, and so no new secret could be added to the set at all — while
+decryption with the expired key kept working and hid that. age keys do not
+expire, the recipients are plain text in `.sops.yaml`, and re-keying is
+`sops updatekeys`.
+
 ## Content Types
 
 All content types are defined using Kotlin interfaces or abstract classes inheriting from

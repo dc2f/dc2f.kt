@@ -1,0 +1,40 @@
+# Which key encrypts what. sops reads this on `sops -e`, so the recipients never
+# have to be repeated on the command line and a new secrets file cannot
+# accidentally be written with the wrong set.
+#
+# The keys below are public. The matching age identities live in
+# ~/.config/sops/age/keys.txt on a machine that may decrypt, and in CI as the
+# single SOPS_AGE_KEY repository secret.
+#
+# This replaces blackbox, which this repository used until 2026-11. blackbox
+# encrypted to GPG keys, and the CI admin key expired on 2021-09-08: GnuPG
+# refuses an expired key as a recipient, so no new file could be added to the
+# set at all, while decryption kept working and hid the breakage. age keys do
+# not expire, and re-keying is one command:
+#
+#   sops updatekeys _tools/secrets/build_secrets.gradle.kts.sops.json
+#
+# which re-encrypts the data key to the new recipient set without writing
+# plaintext to disk.
+
+creation_rules:
+  # Everything under _tools/secrets/. The rule is matched against the plaintext
+  # path on `sops -e` and against the encrypted path on `sops updatekeys`, so it
+  # deliberately covers both spellings rather than just `*.sops.json`.
+  - path_regex: ^_tools/secrets/
+    # Two recipients, and they are alternatives rather than a quorum: either
+    # private key decrypts on its own. age has no k-of-n.
+    #
+    # The first is the owner's, the same identity the sibling projects use,
+    # because it is the same person at the same desk. The second is **this**
+    # repository's CI identity, deliberately distinct from any sibling's:
+    # sharing one CI key would make revoking either project's CI a rotation of
+    # both, while separate keys make it a local matter — drop the line below,
+    # run `sops updatekeys _tools/secrets/*.sops.json`, delete the GitHub
+    # secret.
+    #
+    # The CI private half should exist only as this repository's SOPS_AGE_KEY
+    # secret: not in a password manager, and not on the laptop once uploaded.
+    age: >-
+      age1wk48cqpglu37a4zed268qxlndm0r4vxwzjwlknp0c8uk7wddduvq5gayk7,
+      age154a7lzmfx5q0pnt26rv9t3f20k9fn8xg84mxd3jaxskwkaqckyus3z03ee

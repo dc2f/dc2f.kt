@@ -25,10 +25,11 @@
 
 #### project specific ignores below
 
-/.blackbox/pubring.gpg~
-/.blackbox/pubring.kbx~
-/.blackbox/secring.gpg
+# Plaintext of the sops-encrypted files next to them. build_secrets is written
+# by _tools/postdeploy.sh; the other two are only ever decrypted by hand.
 /_tools/secrets/build_secrets.gradle.kts
+/_tools/secrets/signing_key_passphrase.txt
+/_tools/secrets/central_portal_token.txt
 
 .tmp
 
