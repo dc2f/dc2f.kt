@@ -17,9 +17,22 @@ jobs:
       with:
         distribution: temurin
         java-version: '17'
+    # sops is not on the runner image. Pinned to a version and its published
+    # checksum, so a replaced release cannot silently become the thing that
+    # reads this repository's secrets.
+    - name: Install sops
+      run: |
+        curl -fsSLo /tmp/sops https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+        echo "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b  /tmp/sops" | sha256sum -c -
+        chmod +x /tmp/sops
+        sudo mv /tmp/sops /usr/local/bin/sops
+    # Writes the plaintext _tools/secrets/build_secrets.gradle.kts that
+    # build.gradle.kts applies as a Gradle script. SOPS_AGE_KEY is the private
+    # half of this repository's CI age key; see .sops.yaml for the recipients.
+    # It replaced BLACKBOX_SECRET when secret handling moved to sops.
     - name: Postdeploy
       env:
-        BLACKBOX_SECRET: ${{ secrets.BLACKBOX_SECRET }}
+        SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
       run: _tools/postdeploy.sh
     # Publishing is not part of this job any more: OSSRH reached EOL on
     # 2025-06-30 and both of its hosts now 404, so the old `publish` step failed
@@ -42,7 +55,7 @@ jobs:
       with:
         distribution: temurin
         java-version: '17'
-    # No blackbox here: the signing key and the Portal token come from repository
+    # No sops here: the signing key and the Portal token come from repository
     # secrets, so this job does not need the encrypted build_secrets.gradle.kts.
     # SIGNING_KEY is the armoured private key (`gpg --armor --export-secret-keys`).
     - name: Publish to the Central Portal staging repository
