@@ -17,10 +17,26 @@ jobs:
       with:
         distribution: temurin
         java-version: '17'
+    # A step's `if` can read the `env` context but not `secrets`, so the test
+    # happens here, in the one place that is allowed to see the value. Passing
+    # it as a job-level `env` instead would put the key in the environment of
+    # every step, `./gradlew test` included, for no reason.
+    - name: Check for an age identity
+      id: age
+      env:
+        SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+      run: |
+        if test -n "${SOPS_AGE_KEY}" ; then
+          echo "present=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          echo "SOPS_AGE_KEY is not set, so the sops decrypt is skipped." >&2
+        fi
     # sops is not on the runner image. Pinned to a version and its published
     # checksum, so a replaced release cannot silently become the thing that
     # reads this repository's secrets.
     - name: Install sops
+      if: steps.age.outputs.present == 'true'
       run: |
         curl -fsSLo /tmp/sops https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
         echo "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b  /tmp/sops" | sha256sum -c -
@@ -30,7 +46,16 @@ jobs:
     # build.gradle.kts applies as a Gradle script. SOPS_AGE_KEY is the private
     # half of this repository's CI age key; see .sops.yaml for the recipients.
     # It replaced BLACKBOX_SECRET when secret handling moved to sops.
+    #
+    # Skipped when that secret is not configured, which is also what a pull
+    # request from a fork sees. Nothing in this job actually needs it:
+    # build.gradle.kts treats the file as optional and warns, and only `publish`
+    # uses the values in it, from repository secrets of its own. The step is
+    # here so that every push proves the sops setup still decrypts, instead of
+    # finding that out on release day -- so when the secret IS set, a failure
+    # here is real and fails the build.
     - name: Postdeploy
+      if: steps.age.outputs.present == 'true'
       env:
         SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
       run: _tools/postdeploy.sh
