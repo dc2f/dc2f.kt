@@ -61,6 +61,28 @@ _tools/secrets-encrypt.sh _tools/secrets/build_secrets.gradle.kts
 sops updatekeys _tools/secrets/build_secrets.gradle.kts.sops.json
 ```
 
+Releases normally happen by tag, in CI. They do not have to: with the age
+identity, the whole publish path runs locally, which is the reason the encrypted
+copies exist at all.
+
+```bash
+eval "$(_tools/secrets-env.sh)"   # CENTRAL_TOKEN_*, SIGNING_KEY, SIGNING_PASSWORD
+./gradlew publish -Pversion=0.3.1
+_tools/central-publish.sh         # hand the staged deployment to the Portal
+```
+
+`eval` is unavoidable there — a child process cannot set variables in its
+parent, and writing them to a file would leave the signing key in plaintext on
+disk after the release. The script refuses to run with stdout on a terminal, so
+a stray invocation cannot paint the key into your scrollback.
+
+Not every file is encrypted to both recipients. `signing_key.asc` — the armoured
+private key — is encrypted to the **owner alone**, under its own first rule in
+`.sops.yaml`. CI never reads it: the publish job signs with the `SIGNING_KEY`
+repository secret. The split is deliberate, because a CI identity that could
+decrypt the signing key would let whoever holds it sign a release as dc2f, and
+no job here needs that.
+
 Decrypting needs an age identity: yours in the sops age key file locally, or the
 `SOPS_AGE_KEY` repository secret in CI. On macOS sops looks for that file under
 `~/Library/Application Support/sops/age/keys.txt`, not the `~/.config` path the

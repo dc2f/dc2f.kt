@@ -30,6 +30,7 @@
 /_tools/secrets/build_secrets.gradle.kts
 /_tools/secrets/signing_key_passphrase.txt
 /_tools/secrets/central_portal_token.txt
+/_tools/secrets/signing_key.asc
 
 .tmp
 

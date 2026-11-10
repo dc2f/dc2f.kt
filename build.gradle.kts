@@ -122,13 +122,29 @@ publishing {
 }
 
 signing {
-    // In CI there is no gpg keyring and no decrypted build_secrets.gradle.kts;
-    // the armoured private key arrives in SIGNING_KEY instead. Locally the
-    // signing.* properties from build_secrets.gradle.kts still drive gpg as
-    // they always have.
+    // The armoured private key arrives in SIGNING_KEY: from a repository secret
+    // in CI, and locally from `eval "$(_tools/secrets-env.sh)"`, which reads it
+    // out of sops. This in-memory path is now the only signing path. The
+    // signing.* properties that used to drive gpg named the 2019 key and the
+    // committed secring.gpg, both superseded by 464802BC…83D477BC.
+    //
+    // isNullOrBlank(), not != null: an empty SIGNING_KEY is not a key, but it
+    // used to pass the guard and then fail far away as "no configured
+    // signatory".
     val signingKey = System.getenv("SIGNING_KEY")
-    if (signingKey != null) {
-        useInMemoryPgpKeys(signingKey, System.getenv("SIGNING_PASSWORD"))
+    if (!signingKey.isNullOrBlank()) {
+        val signingPassword = System.getenv("SIGNING_PASSWORD")
+        // Checked here because the alternative is unreadable. Passing null
+        // throws a NullPointerException out of useInMemoryPgpKeys(), and
+        // passing "" gets you "PGPException: checksum mismatch in checksum of
+        // 20 bytes" from BouncyCastle when it fails to unlock the key -- a
+        // message that names neither the passphrase nor this file.
+        require(!signingPassword.isNullOrBlank()) {
+            "SIGNING_KEY is set but SIGNING_PASSWORD is not, and the key is " +
+                "passphrase-protected. Set both, or run: " +
+                "eval \"\$(_tools/secrets-env.sh)\""
+        }
+        useInMemoryPgpKeys(signingKey, signingPassword)
     }
     sign(publishing.publications["mavenCentralJava"])
 }
