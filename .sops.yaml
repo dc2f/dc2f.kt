@@ -18,9 +18,22 @@
 # plaintext to disk.
 
 creation_rules:
-  # Everything under _tools/secrets/. The rule is matched against the plaintext
-  # path on `sops -e` and against the encrypted path on `sops updatekeys`, so it
-  # deliberately covers both spellings rather than just `*.sops.json`.
+  # The armoured signing private key, encrypted to the owner alone. Listed
+  # first because sops takes the first rule that matches, and the rule below
+  # would add the CI identity -- and a CI key that can decrypt this one means
+  # whoever holds it can sign a release as dc2f, which no job here needs: CI
+  # signs with the SIGNING_KEY repository secret instead. This copy exists so a
+  # release can be cut from a laptop when GitHub is unavailable, which is the
+  # whole point of keeping encrypted copies at all; it is not a CI input.
+  #
+  # No `$` anchor, so the rule also matches signing_key.asc.sops.json on
+  # `sops updatekeys`.
+  - path_regex: ^_tools/secrets/signing_key\.asc
+    age: age1wk48cqpglu37a4zed268qxlndm0r4vxwzjwlknp0c8uk7wddduvq5gayk7
+  # Everything else under _tools/secrets/. The rule is matched against the
+  # plaintext path on `sops -e` and against the encrypted path on
+  # `sops updatekeys`, so it deliberately covers both spellings rather than just
+  # `*.sops.json`.
   - path_regex: ^_tools/secrets/
     # Two recipients, and they are alternatives rather than a quorum: either
     # private key decrypts on its own. age has no k-of-n.
